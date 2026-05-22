@@ -653,6 +653,10 @@ select {
   transition: background 0.2s, transform 0.2s;
 }
 
+.radio-label-text {
+  display: none;
+}
+
 .radio-cell input:checked + .radio-custom {
   background: #0f4eb8;
   transform: scale(1.05);
@@ -704,27 +708,123 @@ select {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .page-shell {
-    padding: 18px;
+    padding: 12px;
   }
 
   .survey-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .brand-row {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .brand-image {
+    max-height: 48px;
+  }
+
+  .title-block {
+    text-align: center;
+  }
+
+  .title-block h1 {
+    font-size: 1.35rem;
+    line-height: 1.25;
+  }
+
+  .admin-link,
+  .download-button,
+  .submit-button {
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .panel {
+    border-radius: 14px;
+  }
+
+  .panel-content,
+  .profile-fields,
+  .survey-section,
+  .comment-section {
+    padding: 16px;
+  }
+
+  .panel-content p,
+  .panel-content li,
+  .panel-content ol {
+    line-height: 1.55;
+  }
+
+  .section-title {
+    width: 100%;
+    justify-content: center;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 0.95rem;
+    text-align: center;
   }
 
   .table-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+    border: 0;
   }
 
-  .table-header,
-  .table-cell,
-  .radio-cell {
-    padding: 12px;
+  .table-header {
+    display: none;
+  }
+
+  .table-cell {
+    border: 1px solid #dbeafe;
+    border-radius: 14px 14px 0 0;
+    padding: 14px;
+    background: #f8fafc;
   }
 
   .radio-cell {
     justify-content: flex-start;
+    min-height: auto;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  }
+
+  .question-cell {
+    align-items: flex-start;
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+
+  .question-number {
+    min-width: 30px;
+    height: 30px;
+  }
+
+  .radio-custom {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .radio-label-text {
+    display: inline;
+    color: #0f172a;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .radio-cell:has(input:checked) {
+    border-color: #0f4eb8;
+    background: #eef4ff;
   }
 }

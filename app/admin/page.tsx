@@ -11,7 +11,6 @@ type SurveyRecord = {
   createdAt: string;
   profile: {
     name: string;
-    institution: string;
     directorate: string;
     serviceType: string;
   };
@@ -66,7 +65,7 @@ export default function AdminPage() {
 
     return {
       totalSurveys: records.length,
-      uniqueRespondents: new Set(records.map((record) => `${record.profile.name}-${record.profile.institution}-${record.profile.directorate}-${record.profile.serviceType}`)).size,
+      uniqueRespondents: new Set(records.map((record) => `${record.profile.name}-${record.profile.directorate}-${record.profile.serviceType}`)).size,
       serviceSummary,
       overallTarget,
       overallResponded,
@@ -90,7 +89,6 @@ export default function AdminPage() {
       return {
         Tanggal: new Date(record.createdAt).toLocaleString('id-ID'),
         Nama: record.profile.name,
-        'Satuan Kerja': record.profile.institution,
         Direktorat: record.profile.directorate,
         'Jenis Layanan': record.profile.serviceType,
         Komentar: record.comments,
@@ -159,8 +157,7 @@ export default function AdminPage() {
 
       <div className="admin-link-row">
         <div className="admin-actions">
-          <a className="admin-link" href={withBasePath('/')}>Kembali ke Form Survei</a>
-          <a className="admin-link" href={withBasePath('/list')}>Daftar URL Layanan</a>
+          <a className="admin-link" href={withBasePath('/')}>Kembali ke Pilih Layanan</a>
           <button type="button" className="download-button" onClick={downloadReport}>Download Excel</button>
           <button type="button" className="download-button" onClick={downloadPDFReport}>Download PDF</button>
         </div>
@@ -264,7 +261,6 @@ export default function AdminPage() {
                   <span>{new Date(record.createdAt).toLocaleString('id-ID')}</span>
                 </div>
                 <p><strong>Layanan:</strong> {record.profile.serviceType || 'Belum dipilih'}</p>
-                <p><strong>Satuan Kerja:</strong> {record.profile.institution || 'Belum diisi'}</p>
                 <p><strong>Direktorat:</strong> {record.profile.directorate || 'Belum dipilih'}</p>
                 <p><strong>Catatan:</strong> {record.comments || '-'}</p>
               </div>

@@ -8,7 +8,6 @@ type SurveyRecord = {
   createdAt: string;
   profile: {
     name: string;
-    institution: string;
     directorate: string;
     serviceType: string;
   };
@@ -68,7 +67,6 @@ const directorates = [
 export default function HomePage() {
   const [profile, setProfile] = useState({
     name: '',
-    institution: '',
     directorate: '',
     serviceType: '',
   });
@@ -106,7 +104,6 @@ export default function HomePage() {
     setComments('');
     setProfile({
       name: '',
-      institution: '',
       directorate: '',
       serviceType: getServiceFromPath(window.location.pathname),
     });
@@ -152,15 +149,6 @@ export default function HomePage() {
                 value={profile.name}
                 onChange={(e) => handleProfileChange('name', e.target.value)}
                 placeholder="Nama / Inisial"
-                required
-              />
-            </label>
-            <label>
-              Satuan Kerja / Lembaga / Perusahaan
-              <input
-                value={profile.institution}
-                onChange={(e) => handleProfileChange('institution', e.target.value)}
-                placeholder="Satuan Kerja"
                 required
               />
             </label>
@@ -218,6 +206,7 @@ export default function HomePage() {
                           required
                         />
                         <span className="radio-custom" />
+                        <span className="radio-label-text">{option}</span>
                       </label>
                     );
                   })}
@@ -253,6 +242,7 @@ export default function HomePage() {
                           required
                         />
                         <span className="radio-custom" />
+                        <span className="radio-label-text">{option}</span>
                       </label>
                     );
                   })}
