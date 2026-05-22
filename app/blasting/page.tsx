@@ -206,7 +206,10 @@ export default function BlastingPage() {
   const clearHistory = async () => {
     try {
       const response = await fetch(withBasePath('/api/blast/history'), { method: 'DELETE' });
-      if (!response.ok) throw new Error('Gagal membersihkan riwayat blast.');
+      if (!response.ok) {
+        const payload = await response.json() as { error?: string };
+        throw new Error(payload.error || 'Gagal membersihkan riwayat blast.');
+      }
       setHistory([]);
       setBlastNotice('Riwayat blast dibersihkan.');
     } catch (error) {

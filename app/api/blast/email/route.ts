@@ -16,10 +16,9 @@ const getAppUrl = () => {
   return configuredUrl.startsWith('http') ? configuredUrl : `https://${configuredUrl}`;
 };
 
-const getSurveyLink = (serviceType: string, blastId?: string) => {
+const getSurveyLink = (serviceType: string) => {
   const baseUrl = getAppUrl().replace(/\/+$/g, '');
-  const path = `${baseUrl}/${serviceToSlug(serviceType)}`;
-  return blastId ? `${path}?blastId=${encodeURIComponent(blastId)}` : path;
+  return `${baseUrl}/${serviceToSlug(serviceType)}`;
 };
 
 const getTrackingUrl = (path: string, blastId: string) => {
@@ -28,26 +27,32 @@ const getTrackingUrl = (path: string, blastId: string) => {
 };
 
 const buildEmail = (person: EmailRecipient, blastId: string) => {
-  const surveyLink = getSurveyLink(person.serviceType, blastId);
+  const surveyLink = getSurveyLink(person.serviceType);
   const clickLink = getTrackingUrl('/api/track/click', blastId);
   const openPixel = getTrackingUrl('/api/track/open', blastId);
-  const subject = 'Permohonan Pengisian Survei Layanan';
+  const subject = 'Permohonan Pengisian Survei Kepuasan Layanan';
   const text = [
-    `Halo ${person.name},`,
+    `Yth. ${person.name},`,
     '',
-    'Mohon kesediaannya untuk mengisi survei layanan berikut:',
+    'Dengan hormat,',
+    '',
+    'Mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:',
     person.serviceType,
     '',
-    `Link survei: ${clickLink}`,
+    `Tautan survei: ${surveyLink}`,
+    '',
+    'Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.',
     '',
     'Terima kasih.',
   ].join('\n');
   const html = `
-    <p>Halo ${person.name},</p>
-    <p>Mohon kesediaannya untuk mengisi survei layanan berikut:</p>
+    <p>Yth. ${person.name},</p>
+    <p>Dengan hormat,</p>
+    <p>Mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:</p>
     <p><strong>${person.serviceType}</strong></p>
-    <p><a href="${clickLink}">Isi survei layanan</a></p>
-    <p>${surveyLink}</p>
+    <p>Tautan survei:</p>
+    <p><a href="${clickLink}">${surveyLink}</a></p>
+    <p>Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.</p>
     <p>Terima kasih.</p>
     <img src="${openPixel}" width="1" height="1" alt="" style="display:none" />
   `;

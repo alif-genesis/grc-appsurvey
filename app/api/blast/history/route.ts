@@ -62,7 +62,7 @@ export async function DELETE() {
     const { error } = await supabase
       .from('blast_records')
       .delete()
-      .not('id', 'is', null);
+      .neq('id', '');
 
     if (error) throw error;
 

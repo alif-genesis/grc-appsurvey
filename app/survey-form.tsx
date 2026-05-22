@@ -36,7 +36,18 @@ const saveSurveyRecord = (survey: SurveyRecord) => {
 
 const getBlastIdFromUrl = () => {
   if (typeof window === 'undefined') return '';
-  return new URLSearchParams(window.location.search).get('blastId') || '';
+  const paramsBlastId = new URLSearchParams(window.location.search).get('blastId');
+  if (paramsBlastId) {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
+    return paramsBlastId;
+  }
+
+  const cookieBlastId = document.cookie
+    .split('; ')
+    .find((cookie) => cookie.startsWith('genesis_blast_id='))
+    ?.split('=')[1];
+
+  return cookieBlastId ? decodeURIComponent(cookieBlastId) : '';
 };
 
 const readErrorResponse = async (response: Response) => {

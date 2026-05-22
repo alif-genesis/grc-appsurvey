@@ -21,5 +21,16 @@ export async function GET(request: NextRequest) {
     .eq('id', blastId)
     .is('clicked_at', null);
 
-  return NextResponse.redirect(data?.survey_link || new URL('/', request.url).toString());
+  const redirectUrl = data?.survey_link || new URL('/', request.url).toString();
+  const response = NextResponse.redirect(redirectUrl);
+
+  response.cookies.set('genesis_blast_id', blastId, {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: request.nextUrl.protocol === 'https:',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30,
+  });
+
+  return response;
 }
