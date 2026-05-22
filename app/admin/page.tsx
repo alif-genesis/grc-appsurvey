@@ -34,9 +34,27 @@ const loadSurveyRecords = (): SurveyRecord[] => {
 
 export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
+  const [loadMessage, setLoadMessage] = useState('Memuat data survey...');
 
   useEffect(() => {
-    setRecords(loadSurveyRecords());
+    const loadRecords = async () => {
+      try {
+        const response = await fetch(withBasePath('/api/surveys'), { cache: 'no-store' });
+        const payload = await response.json() as { records?: SurveyRecord[]; error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error || 'Gagal mengambil data survey dari server.');
+        }
+
+        setRecords(payload.records ?? []);
+        setLoadMessage('Data diambil dari Supabase.');
+      } catch (error) {
+        setRecords(loadSurveyRecords());
+        setLoadMessage(error instanceof Error ? error.message : 'Menampilkan data lokal browser.');
+      }
+    };
+
+    loadRecords();
   }, []);
 
   const summary = useMemo(() => {
@@ -163,6 +181,7 @@ export default function AdminPage() {
           <button type="button" className="download-button" onClick={downloadPDFReport}>Download PDF</button>
         </div>
       </div>
+      {loadMessage && <p className="admin-data-message">{loadMessage}</p>}
 
       <section className="dashboard-grid">
         <div className="summary-card">

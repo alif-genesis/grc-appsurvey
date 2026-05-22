@@ -74,6 +74,8 @@ export default function HomePage() {
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [comments, setComments] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const serviceType = getServiceFromPath(window.location.pathname);
@@ -88,8 +90,11 @@ export default function HomePage() {
     setResponses((current) => ({ ...current, [questionKey]: answer }));
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitMessage('');
+
     const survey: SurveyRecord = {
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
@@ -98,15 +103,35 @@ export default function HomePage() {
       comments,
     };
 
-    saveSurveyRecord(survey);
-    setSubmitted(true);
-    setResponses({});
-    setComments('');
-    setProfile({
-      name: '',
-      directorate: '',
-      serviceType: getServiceFromPath(window.location.pathname),
-    });
+    try {
+      const response = await fetch(withBasePath('/api/surveys'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(survey),
+      });
+      const payload = await response.json() as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Survey gagal disimpan ke server.');
+      }
+
+      saveSurveyRecord(survey);
+      setSubmitted(true);
+      setSubmitMessage('Terima kasih! Survei Anda telah tersimpan.');
+      setResponses({});
+      setComments('');
+      setProfile({
+        name: '',
+        directorate: '',
+        serviceType: getServiceFromPath(window.location.pathname),
+      });
+    } catch (error) {
+      saveSurveyRecord(survey);
+      setSubmitted(false);
+      setSubmitMessage(error instanceof Error ? error.message : 'Survey gagal disimpan ke server.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -258,8 +283,12 @@ export default function HomePage() {
             </label>
           </div>
 
-          <button className="submit-button" type="submit">SIMPAN SURVEI</button>
-          {submitted && <p className="success-message">Terima kasih! Survei Anda telah disimpan.</p>}
+          <button className="submit-button" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SURVEI'}
+          </button>
+          {submitMessage && (
+            <p className={submitted ? 'success-message' : 'error-message'}>{submitMessage}</p>
+          )}
         </section>
       </form>
     </main>
