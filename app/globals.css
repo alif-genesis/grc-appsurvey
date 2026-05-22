@@ -536,6 +536,13 @@ select {
   font-weight: 700;
 }
 
+.inline-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .add-person-form {
   display: grid;
   grid-template-columns: 1fr 1fr 1.2fr minmax(260px, 1.6fr) auto;
@@ -648,6 +655,11 @@ select {
 .failed-pill {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.done-pill {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 @media (max-width: 1080px) {

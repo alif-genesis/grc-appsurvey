@@ -13,6 +13,7 @@ type SurveyRecord = {
   };
   responses: Record<string, string>;
   comments: string;
+  blastId?: string;
 };
 
 const SURVEY_STORAGE_KEY = 'genesis-survey-records';
@@ -31,6 +32,11 @@ const saveSurveyRecord = (survey: SurveyRecord) => {
   if (typeof window === 'undefined') return;
   const records = loadSurveyRecords();
   window.localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify([survey, ...records]));
+};
+
+const getBlastIdFromUrl = () => {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get('blastId') || '';
 };
 
 const readErrorResponse = async (response: Response) => {
@@ -113,6 +119,7 @@ export default function HomePage() {
       profile,
       responses,
       comments,
+      blastId: getBlastIdFromUrl() || undefined,
     };
 
     try {
@@ -159,9 +166,6 @@ export default function HomePage() {
           <p>TAHUN 2026</p>
         </div>
       </div>
-      <div className="admin-link-row">
-        <a className="admin-link" href={withBasePath('/admin')}>Masuk Admin Dashboard</a>
-      </div>
 
       <form className="survey-grid" onSubmit={handleSubmit}>
         <section className="panel guidance-panel">
@@ -170,9 +174,10 @@ export default function HomePage() {
             <p>Survei Kepuasan Layanan akan menghasilkan Indeks Kepuasan Layanan Dukungan Manajemen yang merupakan Target Kinerja Pejabat Pimpinan Tinggi di Lingkungan Sekretariat Jenderal dan Kementerian.</p>
             <h2>Tata Cara Pengisian Survei:</h2>
             <ol>
-              <li>Responden dapat mengisi survei lebih dari satu layanan yang diterima pada Mei 2025 s.d. April 2026.</li>
-              <li>Apabila responden ingin mengisi survei lebih dari satu, maka responden dapat mengisi sampai dengan klik <strong>[Simpan Survei]</strong>, lalu memilih layanan lainnya yang akan disurvei.</li>
-              <li>Jangka waktu pengisian survei adalah 19 Mei 2026 s.d. 30 Juni 2026.</li>
+              <li>Pilih layanan yang pernah Anda terima melalui halaman daftar layanan atau tautan survei yang dikirimkan.</li>
+              <li>Pastikan kolom Jenis Layanan sudah sesuai dengan layanan yang akan dinilai sebelum mengisi survei.</li>
+              <li>Lengkapi profil, berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Simpan Survei]</strong>.</li>
+              <li>Jangka waktu pengisian survei adalah 1 Juni 2026 s.d. 30 Juni 2026.</li>
             </ol>
             <p className="note">Catatan: Responden wajib mengisi survei secara objektif. Partisipasi Anda dalam survei ini sangat berharga bagi kami.</p>
           </div>
@@ -180,11 +185,11 @@ export default function HomePage() {
           <div className="panel-title">PROFIL</div>
           <div className="profile-fields">
             <label>
-              Nama / Inisial
+              Nama Lengkap
               <input
                 value={profile.name}
                 onChange={(e) => handleProfileChange('name', e.target.value)}
-                placeholder="Nama / Inisial"
+                placeholder="Nama Lengkap"
                 required
               />
             </label>

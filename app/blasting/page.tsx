@@ -23,9 +23,13 @@ type BlastHistory = {
   status: 'Sukses' | 'Gagal';
   error?: string;
   createdAt: string;
+  sentAt?: string | null;
+  openedAt?: string | null;
+  clickedAt?: string | null;
+  submittedAt?: string | null;
 };
 
-type EmailBlastResult = Omit<BlastHistory, 'id' | 'channel' | 'createdAt'>;
+type EmailBlastResult = Omit<BlastHistory, 'channel' | 'createdAt'>;
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
 const HISTORY_STORAGE_KEY = 'genesis-blasting-history';
@@ -62,6 +66,19 @@ const buildMessage = (person: BlastPerson, channel: BlastHistory['channel']) => 
   return `Halo ${person.name}, mohon isi survei ${person.serviceType} melalui link ${link}. Dikirim ke ${target}.`;
 };
 
+const formatDateTime = (value?: string | null) => (
+  value ? new Date(value).toLocaleString('id-ID') : '-'
+);
+
+const getMonitoringStatus = (row: BlastHistory) => {
+  if (row.status === 'Gagal') return 'Gagal dikirim';
+  if (row.submittedAt) return 'Terima dan sudah isi';
+  if (row.clickedAt) return 'Terima, buka link, belum isi';
+  if (row.openedAt) return 'Terima, buka email, belum isi';
+  if (row.sentAt || row.status === 'Sukses') return 'Terima, belum buka email/link';
+  return 'Belum terkirim';
+};
+
 export default function BlastingPage() {
   const [people, setPeople] = useState<BlastPerson[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
@@ -72,6 +89,7 @@ export default function BlastingPage() {
   useEffect(() => {
     setPeople(loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []));
     setHistory(loadFromStorage<BlastHistory[]>(HISTORY_STORAGE_KEY, []));
+    refreshHistory();
   }, []);
 
   useEffect(() => {
@@ -86,6 +104,19 @@ export default function BlastingPage() {
     () => people.filter((person) => person.name.trim() && person.serviceType.trim()),
     [people],
   );
+
+  const refreshHistory = async () => {
+    try {
+      const response = await fetch(withBasePath('/api/blast/history'), { cache: 'no-store' });
+      const payload = await response.json() as { records?: BlastHistory[]; error?: string };
+
+      if (!response.ok) throw new Error(payload.error || 'Gagal mengambil monitoring blast.');
+
+      setHistory(payload.records ?? []);
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil monitoring blast.');
+    }
+  };
 
   const addPerson = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -126,6 +157,7 @@ export default function BlastingPage() {
         message: buildMessage(person, 'WhatsApp'),
         status: 'Sukses' as const,
         createdAt: now,
+        sentAt: now,
       }));
 
     setHistory((current) => [...rows, ...current]);
@@ -153,13 +185,13 @@ export default function BlastingPage() {
 
       const now = new Date().toISOString();
       const rows = (payload.results ?? []).map((result) => ({
-        id: createId(),
         channel: 'Email' as const,
         createdAt: now,
         ...result,
       }));
 
       setHistory((current) => [...rows, ...current]);
+      refreshHistory();
 
       const successCount = rows.filter((row) => row.status === 'Sukses').length;
       const failedCount = rows.length - successCount;
@@ -171,8 +203,15 @@ export default function BlastingPage() {
     }
   };
 
-  const clearHistory = () => {
-    setHistory([]);
+  const clearHistory = async () => {
+    try {
+      const response = await fetch(withBasePath('/api/blast/history'), { method: 'DELETE' });
+      if (!response.ok) throw new Error('Gagal membersihkan riwayat blast.');
+      setHistory([]);
+      setBlastNotice('Riwayat blast dibersihkan.');
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal membersihkan riwayat blast.');
+    }
   };
 
   return (
@@ -334,9 +373,12 @@ export default function BlastingPage() {
       <section className="table-card blast-section">
         <div className="section-heading-row">
           <h2>Riwayat Blast</h2>
-          {history.length > 0 && (
-            <button type="button" className="text-button" onClick={clearHistory}>Bersihkan Riwayat</button>
-          )}
+          <div className="inline-actions">
+            <button type="button" className="text-button" onClick={refreshHistory}>Refresh</button>
+            {history.length > 0 && (
+              <button type="button" className="text-button" onClick={clearHistory}>Bersihkan Riwayat</button>
+            )}
+          </div>
         </div>
 
         {history.length === 0 ? (
@@ -347,28 +389,36 @@ export default function BlastingPage() {
               <thead>
                 <tr>
                   <th>Waktu</th>
-                  <th>Channel</th>
                   <th>Nama</th>
                   <th>Tujuan</th>
                   <th>Layanan</th>
                   <th>Link</th>
-                  <th>Status</th>
+                  <th>Terkirim</th>
+                  <th>Email Dibuka</th>
+                  <th>Link Dibuka</th>
+                  <th>Sudah Isi</th>
+                  <th>Monitoring</th>
                   <th>Error</th>
-                  <th>Pesan</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((row) => (
                   <tr key={row.id}>
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
-                    <td>{row.channel}</td>
                     <td>{row.personName}</td>
                     <td>{row.channel === 'WhatsApp' ? row.whatsapp : row.email}</td>
                     <td>{row.serviceType}</td>
                     <td><a href={row.surveyLink}>{row.surveyLink}</a></td>
-                    <td><span className={`status-pill ${row.status === 'Gagal' ? 'failed-pill' : ''}`}>{row.status}</span></td>
+                    <td>{formatDateTime(row.sentAt)}</td>
+                    <td>{formatDateTime(row.openedAt)}</td>
+                    <td>{formatDateTime(row.clickedAt)}</td>
+                    <td>{formatDateTime(row.submittedAt)}</td>
+                    <td>
+                      <span className={`status-pill ${row.status === 'Gagal' ? 'failed-pill' : row.submittedAt ? 'done-pill' : ''}`}>
+                        {getMonitoringStatus(row)}
+                      </span>
+                    </td>
                     <td>{row.error || '-'}</td>
-                    <td>{row.message}</td>
                   </tr>
                 ))}
               </tbody>

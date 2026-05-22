@@ -49,17 +49,24 @@ export async function GET() {
         autoRefreshToken: false,
       },
     });
-    const { error } = await supabase.from('survey_records').select('id').limit(1);
+    const checks = await Promise.all([
+      supabase.from('survey_records').select('id').limit(1),
+      supabase.from('blast_records').select('id').limit(1),
+    ]);
+    const surveyError = checks[0].error;
+    const blastError = checks[1].error;
 
-    if (error) {
+    if (surveyError || blastError) {
       return NextResponse.json({
         ok: false,
         env: {
           NEXT_PUBLIC_SUPABASE_URL: mask(url),
           SUPABASE_SERVICE_ROLE_KEY: mask(serviceRoleKey),
         },
-        table: 'survey_records gagal diakses',
-        error: formatError(error),
+        tables: {
+          survey_records: surveyError ? formatError(surveyError) : 'bisa diakses',
+          blast_records: blastError ? formatError(blastError) : 'bisa diakses',
+        },
       }, { status: 500 });
     }
 
@@ -69,7 +76,10 @@ export async function GET() {
         NEXT_PUBLIC_SUPABASE_URL: mask(url),
         SUPABASE_SERVICE_ROLE_KEY: mask(serviceRoleKey),
       },
-      table: 'survey_records bisa diakses',
+      tables: {
+        survey_records: 'bisa diakses',
+        blast_records: 'bisa diakses',
+      },
     });
   } catch (error) {
     return NextResponse.json({

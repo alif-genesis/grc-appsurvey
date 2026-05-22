@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { serviceToSlug } from '../../../services';
+import { formatServerError, getRequiredEnv, getSupabase } from '../../../supabase-server';
 
 type EmailRecipient = {
   name: string;
@@ -9,25 +10,27 @@ type EmailRecipient = {
   serviceType: string;
 };
 
-const getRequiredEnv = (key: string) => {
-  const value = process.env[key];
-  if (!value) throw new Error(`${key} belum diset`);
-  return value;
-};
-
 const getAppUrl = () => {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
   if (!configuredUrl) return '';
   return configuredUrl.startsWith('http') ? configuredUrl : `https://${configuredUrl}`;
 };
 
-const getSurveyLink = (serviceType: string) => {
+const getSurveyLink = (serviceType: string, blastId?: string) => {
   const baseUrl = getAppUrl().replace(/\/+$/g, '');
-  return `${baseUrl}/${serviceToSlug(serviceType)}`;
+  const path = `${baseUrl}/${serviceToSlug(serviceType)}`;
+  return blastId ? `${path}?blastId=${encodeURIComponent(blastId)}` : path;
 };
 
-const buildEmail = (person: EmailRecipient) => {
-  const surveyLink = getSurveyLink(person.serviceType);
+const getTrackingUrl = (path: string, blastId: string) => {
+  const baseUrl = getAppUrl().replace(/\/+$/g, '');
+  return `${baseUrl}${path}?blastId=${encodeURIComponent(blastId)}`;
+};
+
+const buildEmail = (person: EmailRecipient, blastId: string) => {
+  const surveyLink = getSurveyLink(person.serviceType, blastId);
+  const clickLink = getTrackingUrl('/api/track/click', blastId);
+  const openPixel = getTrackingUrl('/api/track/open', blastId);
   const subject = 'Permohonan Pengisian Survei Layanan';
   const text = [
     `Halo ${person.name},`,
@@ -35,7 +38,7 @@ const buildEmail = (person: EmailRecipient) => {
     'Mohon kesediaannya untuk mengisi survei layanan berikut:',
     person.serviceType,
     '',
-    `Link survei: ${surveyLink}`,
+    `Link survei: ${clickLink}`,
     '',
     'Terima kasih.',
   ].join('\n');
@@ -43,11 +46,13 @@ const buildEmail = (person: EmailRecipient) => {
     <p>Halo ${person.name},</p>
     <p>Mohon kesediaannya untuk mengisi survei layanan berikut:</p>
     <p><strong>${person.serviceType}</strong></p>
-    <p><a href="${surveyLink}">${surveyLink}</a></p>
+    <p><a href="${clickLink}">Isi survei layanan</a></p>
+    <p>${surveyLink}</p>
     <p>Terima kasih.</p>
+    <img src="${openPixel}" width="1" height="1" alt="" style="display:none" />
   `;
 
-  return { subject, text, html, surveyLink };
+  return { subject, text, html, surveyLink, clickLink };
 };
 
 export async function POST(request: NextRequest) {
@@ -64,6 +69,7 @@ export async function POST(request: NextRequest) {
     const from = getRequiredEnv('EMAIL_FROM');
     const user = getRequiredEnv('EMAIL_USER');
     const pass = getRequiredEnv('EMAIL_APP_PASSWORD').replace(/\s/g, '');
+    const supabase = getSupabase();
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -71,7 +77,18 @@ export async function POST(request: NextRequest) {
     });
 
     const results = await Promise.all(recipients.map(async (person) => {
-      const email = buildEmail(person);
+      const blastId = crypto.randomUUID();
+      const email = buildEmail(person, blastId);
+      const baseRecord = {
+        id: blastId,
+        channel: 'Email',
+        person_name: person.name,
+        whatsapp: person.whatsapp || '',
+        email: person.email,
+        service_type: person.serviceType,
+        survey_link: email.surveyLink,
+        message: email.text,
+      };
 
       try {
         await transporter.sendMail({
@@ -82,7 +99,17 @@ export async function POST(request: NextRequest) {
           html: email.html,
         });
 
+        const { error: insertError } = await supabase.from('blast_records').insert({
+          ...baseRecord,
+          send_status: 'Sukses',
+          error: '',
+          sent_at: new Date().toISOString(),
+        });
+
+        if (insertError) throw insertError;
+
         return {
+          id: blastId,
           personName: person.name,
           email: person.email,
           whatsapp: person.whatsapp,
@@ -93,7 +120,14 @@ export async function POST(request: NextRequest) {
           error: '',
         };
       } catch (error) {
+        await supabase.from('blast_records').insert({
+          ...baseRecord,
+          send_status: 'Gagal',
+          error: formatServerError(error, 'Email gagal dikirim.'),
+        });
+
         return {
+          id: blastId,
           personName: person.name,
           email: person.email,
           whatsapp: person.whatsapp,
@@ -101,7 +135,7 @@ export async function POST(request: NextRequest) {
           surveyLink: email.surveyLink,
           message: email.text,
           status: 'Gagal',
-          error: error instanceof Error ? error.message : 'Email gagal dikirim.',
+          error: formatServerError(error, 'Email gagal dikirim.'),
         };
       }
     }));
@@ -109,7 +143,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Email blast gagal diproses.' },
+      { error: formatServerError(error, 'Email blast gagal diproses.') },
       { status: 500 },
     );
   }
