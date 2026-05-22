@@ -38,6 +38,34 @@ const getSupabase = () => createClient(
   },
 );
 
+const formatError = (error: unknown, fallback: string) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const details = error as {
+      message?: string;
+      code?: string;
+      details?: string;
+      hint?: string;
+    };
+    const message = [
+      details.message,
+      details.code ? `Code: ${details.code}` : '',
+      details.details ? `Details: ${details.details}` : '',
+      details.hint ? `Hint: ${details.hint}` : '',
+    ].filter(Boolean).join(' | ');
+
+    if (message) return message;
+
+    try {
+      const serialized = JSON.stringify(error);
+      return serialized && serialized !== '{}' ? serialized : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return typeof error === 'string' && error ? error : fallback;
+};
+
 const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
   id: row.id,
   createdAt: row.created_at,
@@ -60,8 +88,9 @@ export async function GET() {
       records: (data as SurveyRow[]).map(mapRowToRecord),
     });
   } catch (error) {
+    console.error('GET /api/surveys failed:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Gagal mengambil data survey.' },
+      { error: formatError(error, 'Gagal mengambil data survey.') },
       { status: 500 },
     );
   }
@@ -88,8 +117,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    console.error('POST /api/surveys failed:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Survey gagal disimpan.' },
+      {
+        error: formatError(error, 'Survey gagal disimpan. Cek /api/debug/supabase untuk detail koneksi database.'),
+      },
       { status: 500 },
     );
   }

@@ -33,6 +33,18 @@ const saveSurveyRecord = (survey: SurveyRecord) => {
   window.localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify([survey, ...records]));
 };
 
+const readErrorResponse = async (response: Response) => {
+  const text = await response.text();
+  if (!text) return `Survey gagal disimpan ke server. Status ${response.status}.`;
+
+  try {
+    const payload = JSON.parse(text) as { error?: string };
+    return payload.error || `Survey gagal disimpan ke server. Status ${response.status}.`;
+  } catch {
+    return `Survey gagal disimpan ke server. Status ${response.status}: ${text.slice(0, 220)}`;
+  }
+};
+
 const serviceQuestions = [
   'Bagaimana penilaian Anda tentang kesesuaian persyaratan pelayanan yang diberikan?',
   'Bagaimana penilaian Anda tentang kemudahan mekanisme dan prosedur pada saat pelayanan diberikan?',
@@ -109,10 +121,8 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(survey),
       });
-      const payload = await response.json() as { error?: string };
-
       if (!response.ok) {
-        throw new Error(payload.error || 'Survey gagal disimpan ke server.');
+        throw new Error(await readErrorResponse(response));
       }
 
       saveSurveyRecord(survey);
@@ -128,7 +138,8 @@ export default function HomePage() {
     } catch (error) {
       saveSurveyRecord(survey);
       setSubmitted(false);
-      setSubmitMessage(error instanceof Error ? error.message : 'Survey gagal disimpan ke server.');
+      const message = error instanceof Error ? error.message : 'Survey gagal disimpan ke server.';
+      setSubmitMessage(`${message} Data sementara tersimpan di browser ini, tapi belum masuk dashboard admin.`);
     } finally {
       setIsSubmitting(false);
     }

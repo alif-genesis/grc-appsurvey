@@ -20,7 +20,7 @@ type SurveyRecord = {
 
 const SURVEY_STORAGE_KEY = 'genesis-survey-records';
 
-const serviceTargets = serviceTypes.map((name) => ({ name, target: 0 }));
+const serviceTargets = serviceTypes.map((name) => ({ name, target: 10 }));
 
 const loadSurveyRecords = (): SurveyRecord[] => {
   if (typeof window === 'undefined') return [];
