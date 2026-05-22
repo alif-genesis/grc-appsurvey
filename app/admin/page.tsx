@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { serviceTypes } from '../services';
+import { serviceTypes, withBasePath } from '../services';
 
 type SurveyRecord = {
   id: string;
@@ -159,7 +159,8 @@ export default function AdminPage() {
 
       <div className="admin-link-row">
         <div className="admin-actions">
-          <a className="admin-link" href="/">Kembali ke Form Survei</a>
+          <a className="admin-link" href={withBasePath('/')}>Kembali ke Form Survei</a>
+          <a className="admin-link" href={withBasePath('/list')}>Daftar URL Layanan</a>
           <button type="button" className="download-button" onClick={downloadReport}>Download Excel</button>
           <button type="button" className="download-button" onClick={downloadPDFReport}>Download PDF</button>
         </div>

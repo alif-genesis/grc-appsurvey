@@ -1,6 +1,6 @@
-import { serviceToSlug, serviceTypes } from '../services';
+import { serviceToSlug, serviceTypes, withBasePath } from '../services';
 
-const getServiceUrl = (service: string) => `/${serviceToSlug(service)}`;
+const getServiceUrl = (service: string) => withBasePath(`/${serviceToSlug(service)}`);
 
 export default function ServiceListPage() {
   return (
@@ -21,8 +21,8 @@ export default function ServiceListPage() {
 
       <div className="admin-link-row">
         <div className="admin-actions">
-          <a className="admin-link" href="/">Kembali ke Form Survei</a>
-          <a className="admin-link" href="/admin">Masuk Admin Dashboard</a>
+          <a className="admin-link" href={withBasePath('/')}>Kembali ke Form Survei</a>
+          <a className="admin-link" href={withBasePath('/admin')}>Masuk Admin Dashboard</a>
         </div>
       </div>
 

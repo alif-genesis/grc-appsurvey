@@ -30,6 +30,12 @@ export const serviceToSlug = (service: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
+export const withBasePath = (path: string) => {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  if (!path.startsWith('/')) return `${basePath}/${path}`;
+  return `${basePath}${path}`;
+};
+
 const normalizePathValue = (value: string) =>
   value
     .trim()
