@@ -361,6 +361,10 @@ export default function BlastingPage() {
     ));
   };
 
+  const clearSelectedPeople = () => {
+    setSelectedPersonIds([]);
+  };
+
   const startWhatsAppBlast = async () => {
     const now = new Date().toISOString();
     const rows = blastTargets
@@ -526,7 +530,14 @@ export default function BlastingPage() {
       <section className="table-card blast-section">
         <div className="section-heading-row">
           <h2>User Management</h2>
-          <span>{isPeopleLoading ? 'Memuat user...' : `${selectedReadyPeople.length} dipilih dari ${people.length} orang`}</span>
+          <div className="inline-actions">
+            <span>{isPeopleLoading ? 'Memuat user...' : `${selectedReadyPeople.length} dipilih dari ${people.length} orang`}</span>
+            {selectedPersonIds.length > 0 && (
+              <button type="button" className="text-button danger-button" onClick={clearSelectedPeople}>
+                Uncheck Semua
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="filter-row">
@@ -605,7 +616,7 @@ export default function BlastingPage() {
                 <tr>
                   <th>
                     <button type="button" className="text-button" onClick={toggleAllSelectedPeople}>
-                      Pilih
+                      Pilih Semua
                     </button>
                   </th>
                   <th>Nama</th>
