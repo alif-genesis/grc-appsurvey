@@ -730,6 +730,35 @@ select {
   font-weight: 700;
 }
 
+.table-plain-text {
+  display: block;
+  min-width: 160px;
+  color: #0f172a;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.person-service-list {
+  display: grid;
+  gap: 8px;
+  min-width: 320px;
+}
+
+.person-service-list span {
+  display: block;
+  color: #0f172a;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.row-action-list {
+  display: grid;
+  gap: 10px;
+  justify-items: flex-start;
+}
+
 .history-table td {
   min-width: 140px;
 }

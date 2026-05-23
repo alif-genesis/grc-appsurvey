@@ -12,6 +12,8 @@ type BlastPerson = {
   serviceTypes: string[];
 };
 
+type BlastPersonDraft = Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'>;
+
 type BlastHistory = {
   id: string;
   channel: 'WhatsApp' | 'Email';
@@ -85,6 +87,7 @@ export default function BlastingPage() {
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
   const [newPerson, setNewPerson] = useState(emptyPerson);
+  const [editDrafts, setEditDrafts] = useState<Record<string, BlastPersonDraft>>({});
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
   const [isWhatsAppBlasting, setIsWhatsAppBlasting] = useState(false);
   const [isPeopleLoading, setIsPeopleLoading] = useState(false);
@@ -229,13 +232,37 @@ export default function BlastingPage() {
     }
   };
 
-  const updatePerson = (id: string, field: keyof Omit<BlastPerson, 'id' | 'serviceTypes'>, value: string) => {
-    setPeople((current) => current.map((person) => (
-      person.id === id ? { ...person, [field]: value } : person
-    )));
+  const startEditPerson = (person: BlastPerson) => {
+    setEditDrafts((current) => ({
+      ...current,
+      [person.id]: {
+        name: person.name,
+        whatsapp: person.whatsapp,
+        email: person.email,
+        serviceTypes: getPersonServices(person),
+      },
+    }));
   };
 
-  const savePerson = async (id: string, updates: Partial<Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'>>) => {
+  const cancelEditPerson = (id: string) => {
+    setEditDrafts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const updatePersonDraft = (id: string, field: keyof Omit<BlastPersonDraft, 'serviceTypes'>, value: string) => {
+    setEditDrafts((current) => ({
+      ...current,
+      [id]: {
+        ...current[id],
+        [field]: value,
+      },
+    }));
+  };
+
+  const savePerson = async (id: string, updates: Partial<BlastPersonDraft>) => {
     try {
       const response = await fetch(withBasePath(`/api/blast/people/${id}`), {
         method: 'PATCH',
@@ -250,11 +277,24 @@ export default function BlastingPage() {
       const payload = await response.json() as { person?: BlastPerson };
       if (payload.person) {
         setPeople((current) => current.map((person) => (
-          person.id === id ? payload.person as BlastPerson : person
+            person.id === id ? payload.person as BlastPerson : person
         )));
       }
+      return true;
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal menyimpan perubahan user.');
+      return false;
+    }
+  };
+
+  const saveEditedPerson = async (id: string) => {
+    const draft = editDrafts[id];
+    if (!draft) return;
+
+    const saved = await savePerson(id, draft);
+    if (saved) {
+      cancelEditPerson(id);
+      setBlastNotice('Perubahan user berhasil disimpan ke Supabase.');
     }
   };
 
@@ -269,20 +309,22 @@ export default function BlastingPage() {
   };
 
   const togglePersonService = (id: string, service: string) => {
-    let nextServices: string[] = [];
-    setPeople((current) => current.map((person) => {
-      if (person.id !== id) return person;
-      const currentServices = getPersonServices(person);
+    setEditDrafts((current) => {
+      const draft = current[id];
+      if (!draft) return current;
+      const currentServices = draft.serviceTypes;
       const exists = currentServices.includes(service);
       const serviceList = exists
         ? currentServices.filter((item) => item !== service)
         : [...currentServices, service];
-      nextServices = serviceList;
-      return { ...person, serviceTypes: serviceList };
-    }));
-    if (nextServices.length > 0) {
-      savePerson(id, { serviceTypes: nextServices });
-    }
+      return {
+        ...current,
+        [id]: {
+          ...draft,
+          serviceTypes: serviceList,
+        },
+      };
+    });
   };
 
   const deletePerson = async (id: string) => {
@@ -548,67 +590,107 @@ export default function BlastingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredPeople.map((person) => (
-                  <tr key={person.id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedPersonIds.includes(person.id)}
-                        onChange={() => toggleSelectedPerson(person.id)}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        value={person.name}
-                        onChange={(event) => updatePerson(person.id, 'name', event.target.value)}
-                        onBlur={() => savePerson(person.id, { name: person.name })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        value={person.whatsapp}
-                        onChange={(event) => updatePerson(person.id, 'whatsapp', event.target.value)}
-                        onBlur={() => savePerson(person.id, { whatsapp: person.whatsapp })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="email"
-                        value={person.email}
-                        onChange={(event) => updatePerson(person.id, 'email', event.target.value)}
-                        onBlur={() => savePerson(person.id, { email: person.email })}
-                      />
-                    </td>
-                    <td>
-                      <div className="service-checkbox-list compact-service-list">
-                        {serviceTypes.map((service) => (
-                          <label key={service} className="service-checkbox-item">
-                            <input
-                              type="checkbox"
-                              checked={getPersonServices(person).includes(service)}
-                              onChange={() => togglePersonService(person.id, service)}
-                            />
-                            <span>{service}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      {getPersonServices(person).length === 0 ? (
-                        <span>Belum ada layanan</span>
-                      ) : getPersonServices(person).length > 1 ? (
-                        <span>{getPersonServices(person).length} layanan dalam 1 link email</span>
-                      ) : (
-                        <a href={getSurveyLink(getPersonServices(person)[0])}>{getSurveyLink(getPersonServices(person)[0])}</a>
-                      )}
-                    </td>
-                    <td>
-                      <button type="button" className="text-button danger-button" onClick={() => deletePerson(person.id)}>
-                        Hapus
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredPeople.map((person) => {
+                  const draft = editDrafts[person.id];
+                  const isEditing = Boolean(draft);
+                  const visiblePerson = draft ? { ...person, ...draft } : person;
+                  const visibleServices = getPersonServices(visiblePerson);
+
+                  return (
+                    <tr key={person.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedPersonIds.includes(person.id)}
+                          onChange={() => toggleSelectedPerson(person.id)}
+                        />
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <input
+                            value={visiblePerson.name}
+                            onChange={(event) => updatePersonDraft(person.id, 'name', event.target.value)}
+                          />
+                        ) : (
+                          <span className="table-plain-text">{person.name}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <input
+                            value={visiblePerson.whatsapp}
+                            onChange={(event) => updatePersonDraft(person.id, 'whatsapp', event.target.value)}
+                          />
+                        ) : (
+                          <span className="table-plain-text">{person.whatsapp || '-'}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <input
+                            type="email"
+                            value={visiblePerson.email}
+                            onChange={(event) => updatePersonDraft(person.id, 'email', event.target.value)}
+                          />
+                        ) : (
+                          <span className="table-plain-text">{person.email || '-'}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <div className="service-checkbox-list compact-service-list">
+                            {serviceTypes.map((service) => (
+                              <label key={service} className="service-checkbox-item">
+                                <input
+                                  type="checkbox"
+                                  checked={visibleServices.includes(service)}
+                                  onChange={() => togglePersonService(person.id, service)}
+                                />
+                                <span>{service}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="person-service-list">
+                            {visibleServices.map((service) => (
+                              <span key={service}>{service}</span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {visibleServices.length === 0 ? (
+                          <span>Belum ada layanan</span>
+                        ) : visibleServices.length > 1 ? (
+                          <span>{visibleServices.length} layanan dalam 1 link email</span>
+                        ) : (
+                          <a href={getSurveyLink(visibleServices[0])}>{getSurveyLink(visibleServices[0])}</a>
+                        )}
+                      </td>
+                      <td>
+                        <div className="row-action-list">
+                          {isEditing ? (
+                            <>
+                              <button type="button" className="text-button" onClick={() => saveEditedPerson(person.id)}>
+                                Simpan
+                              </button>
+                              <button type="button" className="text-button" onClick={() => cancelEditPerson(person.id)}>
+                                Batal
+                              </button>
+                            </>
+                          ) : (
+                            <button type="button" className="text-button" onClick={() => startEditPerson(person)}>
+                              Edit
+                            </button>
+                          )}
+                          <button type="button" className="text-button danger-button" onClick={() => deletePerson(person.id)}>
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
