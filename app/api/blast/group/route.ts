@@ -10,6 +10,7 @@ type BlastGroupRow = {
   email: string;
   service_type: string;
   survey_link: string;
+  submitted_at: string | null;
 };
 
 export async function GET() {
@@ -23,7 +24,7 @@ export async function GET() {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('blast_records')
-      .select('id, blast_group_id, person_name, whatsapp, email, service_type, survey_link')
+      .select('id, blast_group_id, person_name, whatsapp, email, service_type, survey_link, submitted_at')
       .eq('blast_group_id', blastGroupId)
       .order('created_at', { ascending: true });
 
@@ -39,6 +40,7 @@ export async function GET() {
         email: row.email,
         serviceType: row.service_type,
         surveyLink: row.survey_link,
+        submittedAt: row.submitted_at,
       })),
     });
   } catch (error) {

@@ -66,6 +66,19 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabase();
+    if (survey.blastId) {
+      const { data: existingBlast, error: existingBlastError } = await supabase
+        .from('blast_records')
+        .select('submitted_at')
+        .eq('id', survey.blastId)
+        .maybeSingle();
+
+      if (existingBlastError) throw existingBlastError;
+      if (existingBlast?.submitted_at) {
+        return NextResponse.json({ error: 'Survey untuk link ini sudah pernah disubmit.' }, { status: 409 });
+      }
+    }
+
     const { error } = await supabase.from('survey_records').insert({
       id: survey.id,
       created_at: survey.createdAt,

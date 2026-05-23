@@ -18,6 +18,7 @@ type GroupRecord = {
   email: string;
   serviceType: string;
   surveyLink: string;
+  submittedAt?: string | null;
 };
 
 type SurveyProfile = {
@@ -58,6 +59,7 @@ export default function MultiSurveyPage() {
   const [message, setMessage] = useState('Memuat daftar layanan...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const pendingRecords = records.filter((record) => !record.submittedAt);
 
   useEffect(() => {
     const loadGroup = async () => {
@@ -70,7 +72,12 @@ export default function MultiSurveyPage() {
         const groupRecords = payload.records ?? [];
         setRecords(groupRecords);
         setProfile((current) => ({ ...current, name: groupRecords[0]?.personName ?? '' }));
-        setMessage(groupRecords.length > 0 ? '' : 'Tidak ada layanan untuk link ini.');
+        setSubmitted(groupRecords.length > 0 && groupRecords.every((record) => record.submittedAt));
+        setMessage(groupRecords.length === 0
+          ? 'Tidak ada layanan untuk link ini.'
+          : groupRecords.every((record) => record.submittedAt)
+            ? 'Seluruh survei dari link ini sudah pernah disubmit. Terima kasih.'
+            : '');
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Gagal mengambil daftar layanan.');
       }
@@ -99,7 +106,7 @@ export default function MultiSurveyPage() {
     setMessage('');
 
     try {
-      await Promise.all(records.map(async (record) => {
+      await Promise.all(pendingRecords.map(async (record) => {
         const survey: SurveyRecord = {
           id: createId(),
           createdAt: new Date().toISOString(),
@@ -193,7 +200,7 @@ export default function MultiSurveyPage() {
         </section>
 
         <section className="panel survey-panel">
-          {records.map((record, recordIndex) => (
+          {pendingRecords.map((record, recordIndex) => (
             <div key={record.id} className="multi-service-block">
               <div className="multi-service-heading">
                 <span>Layanan {recordIndex + 1}</span>
@@ -285,11 +292,14 @@ export default function MultiSurveyPage() {
             </div>
           ))}
 
-          <button className="submit-button" type="submit" disabled={isSubmitting || records.length === 0}>
-            {isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SEMUA SURVEI'}
+          <button className="submit-button" type="submit" disabled={isSubmitting || pendingRecords.length === 0}>
+            {pendingRecords.length === 0 ? 'SURVEI SUDAH DISIMPAN' : isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SEMUA SURVEI'}
           </button>
           {message && (
             <p className={submitted ? 'success-message' : 'error-message'}>{message}</p>
+          )}
+          {submitted && (
+            <a className="admin-link post-submit-link" href={withBasePath('/')}>Kembali ke Pilih Layanan</a>
           )}
         </section>
       </form>

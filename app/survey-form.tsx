@@ -105,10 +105,28 @@ export default function HomePage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
 
   useEffect(() => {
     const serviceType = getServiceFromPath(window.location.pathname);
     setProfile((current) => ({ ...current, serviceType }));
+
+    const checkSubmission = async () => {
+      try {
+        const response = await fetch(withBasePath('/api/blast/status'), { cache: 'no-store' });
+        const payload = await response.json() as { submitted?: boolean; error?: string };
+
+        if (response.ok && payload.submitted) {
+          setHasExistingSubmission(true);
+          setSubmitted(true);
+          setSubmitMessage('Survey dari link ini sudah pernah disubmit. Terima kasih.');
+        }
+      } catch {
+        // Status check is a convenience guard; submit API still prevents duplicates.
+      }
+    };
+
+    checkSubmission();
   }, []);
 
   const handleProfileChange = (field: keyof typeof profile, value: string) => {
@@ -121,6 +139,8 @@ export default function HomePage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (hasExistingSubmission) return;
+
     setIsSubmitting(true);
     setSubmitMessage('');
 
@@ -145,6 +165,7 @@ export default function HomePage() {
 
       saveSurveyRecord(survey);
       setSubmitted(true);
+      setHasExistingSubmission(true);
       setSubmitMessage('Terima kasih! Survei Anda telah tersimpan.');
       setResponses({});
       setComments('');
@@ -157,7 +178,13 @@ export default function HomePage() {
       saveSurveyRecord(survey);
       setSubmitted(false);
       const message = error instanceof Error ? error.message : 'Survey gagal disimpan ke server.';
-      setSubmitMessage(`${message} Data sementara tersimpan di browser ini, tapi belum masuk dashboard admin.`);
+      if (message.includes('sudah pernah disubmit')) {
+        setSubmitted(true);
+        setHasExistingSubmission(true);
+        setSubmitMessage('Survey dari link ini sudah pernah disubmit. Terima kasih.');
+      } else {
+        setSubmitMessage(`${message} Data sementara tersimpan di browser ini, tapi belum masuk dashboard admin.`);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -310,11 +337,14 @@ export default function HomePage() {
             </label>
           </div>
 
-          <button className="submit-button" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SURVEI'}
+          <button className="submit-button" type="submit" disabled={isSubmitting || hasExistingSubmission}>
+            {hasExistingSubmission ? 'SURVEI SUDAH DISIMPAN' : isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SURVEI'}
           </button>
           {submitMessage && (
             <p className={submitted ? 'success-message' : 'error-message'}>{submitMessage}</p>
+          )}
+          {submitted && (
+            <a className="admin-link post-submit-link" href={withBasePath('/')}>Kembali ke Pilih Layanan</a>
           )}
         </section>
       </form>

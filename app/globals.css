@@ -962,6 +962,12 @@ select {
   transform: none;
 }
 
+.post-submit-link {
+  width: fit-content;
+  margin-top: 12px;
+  border-radius: 12px;
+}
+
 .multi-service-block {
   border-bottom: 1px solid #dbeafe;
   padding-bottom: 28px;

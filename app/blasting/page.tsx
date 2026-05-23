@@ -88,13 +88,16 @@ const getMonitoringStatus = (row: BlastHistory) => {
 
 export default function BlastingPage() {
   const [people, setPeople] = useState<BlastPerson[]>([]);
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
   const [newPerson, setNewPerson] = useState(emptyPerson);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
   const [blastNotice, setBlastNotice] = useState('');
 
   useEffect(() => {
-    setPeople(loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []));
+    const storedPeople = loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []);
+    setPeople(storedPeople);
+    setSelectedPersonIds(storedPeople.map((person) => person.id));
     setHistory(loadFromStorage<BlastHistory[]>(HISTORY_STORAGE_KEY, []));
     refreshHistory();
   }, []);
@@ -111,6 +114,12 @@ export default function BlastingPage() {
     () => people.filter((person) => person.name.trim() && getPersonServices(person).length > 0),
     [people],
   );
+
+  const selectedReadyPeople = useMemo(() => (
+    readyPeople.filter((person) => selectedPersonIds.includes(person.id))
+  ), [readyPeople, selectedPersonIds]);
+
+  const blastTargets = selectedReadyPeople;
 
   const refreshHistory = async () => {
     try {
@@ -136,6 +145,7 @@ export default function BlastingPage() {
     };
 
     setPeople((current) => [person, ...current]);
+    setSelectedPersonIds((current) => [person.id, ...current]);
     setNewPerson(emptyPerson);
   };
 
@@ -169,11 +179,25 @@ export default function BlastingPage() {
 
   const deletePerson = (id: string) => {
     setPeople((current) => current.filter((person) => person.id !== id));
+    setSelectedPersonIds((current) => current.filter((personId) => personId !== id));
+  };
+
+  const toggleSelectedPerson = (id: string) => {
+    setSelectedPersonIds((current) => (
+      current.includes(id) ? current.filter((personId) => personId !== id) : [...current, id]
+    ));
+  };
+
+  const toggleAllSelectedPeople = () => {
+    const readyIds = readyPeople.map((person) => person.id);
+    setSelectedPersonIds((current) => (
+      readyIds.every((id) => current.includes(id)) ? [] : readyIds
+    ));
   };
 
   const startWhatsAppBlast = () => {
     const now = new Date().toISOString();
-    const rows = readyPeople
+    const rows = blastTargets
       .filter((person) => person.whatsapp.trim())
       .flatMap((person) => getPersonServices(person).map((serviceType) => ({
           id: createId(),
@@ -194,7 +218,7 @@ export default function BlastingPage() {
   };
 
   const startEmailBlast = async () => {
-    const recipients = readyPeople.filter((person) => person.email.trim());
+    const recipients = blastTargets.filter((person) => person.email.trim());
     if (recipients.length === 0) return;
 
     setIsEmailBlasting(true);
@@ -274,19 +298,19 @@ export default function BlastingPage() {
           type="button"
           className="blast-action-card"
           onClick={startEmailBlast}
-          disabled={isEmailBlasting || readyPeople.every((person) => !person.email.trim())}
+          disabled={isEmailBlasting || blastTargets.every((person) => !person.email.trim())}
         >
           <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
-          <small>{readyPeople.filter((person) => person.email.trim()).length} penerima siap</small>
+          <small>{blastTargets.filter((person) => person.email.trim()).length} penerima siap</small>
         </button>
         <button
           type="button"
           className="blast-action-card"
           onClick={startWhatsAppBlast}
-          disabled={readyPeople.every((person) => !person.whatsapp.trim())}
+          disabled={blastTargets.every((person) => !person.whatsapp.trim())}
         >
           <span>Start Blast WhatsApp</span>
-          <small>{readyPeople.filter((person) => person.whatsapp.trim()).length} penerima siap</small>
+          <small>{blastTargets.filter((person) => person.whatsapp.trim()).length} penerima siap</small>
         </button>
       </section>
       {blastNotice && <p className="blast-notice">{blastNotice}</p>}
@@ -294,7 +318,7 @@ export default function BlastingPage() {
       <section className="table-card blast-section">
         <div className="section-heading-row">
           <h2>User Management</h2>
-          <span>{people.length} orang</span>
+          <span>{selectedReadyPeople.length} dipilih dari {people.length} orang</span>
         </div>
 
         <form className="add-person-form" onSubmit={addPerson}>
@@ -349,6 +373,11 @@ export default function BlastingPage() {
             <table className="blast-table">
               <thead>
                 <tr>
+                  <th>
+                    <button type="button" className="text-button" onClick={toggleAllSelectedPeople}>
+                      Pilih
+                    </button>
+                  </th>
                   <th>Nama</th>
                   <th>WhatsApp</th>
                   <th>Email</th>
@@ -360,6 +389,13 @@ export default function BlastingPage() {
               <tbody>
                 {people.map((person) => (
                   <tr key={person.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedPersonIds.includes(person.id)}
+                        onChange={() => toggleSelectedPerson(person.id)}
+                      />
+                    </td>
                     <td>
                       <input
                         value={person.name}
