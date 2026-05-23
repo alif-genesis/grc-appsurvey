@@ -8,7 +8,7 @@ import {
   serviceOptions,
   serviceQuestions,
 } from '../survey-form';
-import { withBasePath } from '../services';
+import { KOMDIGI_LOGO_URL, withBasePath } from '../services';
 
 type GroupRecord = {
   id: string;
@@ -228,7 +228,7 @@ export default function MultiSurveyPage() {
     <main className="page-shell">
       <div className="survey-header">
         <div className="brand-row">
-          <img className="brand-image" src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png" alt="Genesis logo" />
+          <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" />
           <div>
             <p className="agency">Biro Hubungan Masyarakat</p>
           </div>

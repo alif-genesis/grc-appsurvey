@@ -21,7 +21,7 @@ const securityHeaders = {
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    "img-src 'self' https://genetikasolusibisnis.co.id data:",
+    "img-src 'self' https://genetikasolusibisnis.co.id https://upload.wikimedia.org data:",
     "connect-src 'self'",
     "form-action 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",

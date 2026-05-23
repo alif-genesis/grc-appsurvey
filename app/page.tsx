@@ -1,4 +1,4 @@
-import { withBasePath } from './services';
+import { GENESIS_LOGO_URL, withBasePath } from './services';
 
 export default function HomePage() {
   return (
@@ -7,7 +7,7 @@ export default function HomePage() {
         <nav className="landing-nav" aria-label="Navigasi utama">
           <img
             className="landing-logo"
-            src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png"
+            src={GENESIS_LOGO_URL}
             alt="PT Genetika Solusi Bisnis"
           />
         </nav>

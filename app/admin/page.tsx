@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import writeXlsxFile from 'write-excel-file/browser';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { serviceTypes, withBasePath } from '../services';
@@ -29,26 +30,6 @@ const loadSurveyRecords = (): SurveyRecord[] => {
   } catch {
     return [];
   }
-};
-
-const escapeCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-
-const downloadCsv = (rows: Record<string, unknown>[], filename: string) => {
-  if (rows.length === 0) return;
-  const headers = Object.keys(rows[0]);
-  const csv = [
-    headers.map(escapeCsvCell).join(','),
-    ...rows.map((row) => headers.map((header) => escapeCsvCell(row[header])).join(',')),
-  ].join('\n');
-  const blob = new Blob([`\uFEFF${csv}`], {
-    type: 'text/csv;charset=utf-8',
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 };
 
 export default function AdminPage() {
@@ -110,7 +91,7 @@ export default function AdminPage() {
     };
   }, [records]);
 
-  const downloadReport = () => {
+  const downloadReport = async () => {
     if (records.length === 0) return;
 
     const rows = records.map((record) => {
@@ -133,7 +114,14 @@ export default function AdminPage() {
       };
     });
 
-    downloadCsv(rows, `report-survei-${new Date().toISOString().slice(0, 10)}.csv`);
+    const headers = Object.keys(rows[0] ?? {});
+    const columns = headers.map((header) => ({
+      header,
+      width: Math.min(Math.max(header.length + 8, 18), 42),
+      cell: (row: Record<string, unknown>) => ({ value: String(row[header] ?? '') }),
+    }));
+
+    await writeXlsxFile(rows, { columns }).toFile(`report-survei-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const downloadPDFReport = () => {

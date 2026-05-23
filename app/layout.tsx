@@ -1,9 +1,15 @@
 import type { Metadata } from 'next';
+import { KOMDIGI_LOGO_URL } from './services';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Survei Kepuasan Layanan Kominfo',
   description: 'Aplikasi survei kepuasan layanan dan persepsi anti korupsi',
+  icons: {
+    icon: KOMDIGI_LOGO_URL,
+    shortcut: KOMDIGI_LOGO_URL,
+    apple: KOMDIGI_LOGO_URL,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

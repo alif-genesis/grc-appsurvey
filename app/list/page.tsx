@@ -19,6 +19,13 @@ export default function ServiceListPage() {
         </div>
       </div>
 
+      <div className="admin-link-row">
+        <div className="admin-actions">
+          <a className="admin-link" href={withBasePath('/')}>Kembali</a>
+          <a className="admin-link secondary-admin-link" href={withBasePath('/admin')}>Admin Dashboard</a>
+        </div>
+      </div>
+
       <section className="table-card">
         <h2>Daftar Layanan</h2>
         <div className="service-link-list">
