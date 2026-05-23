@@ -38,6 +38,38 @@ type SurveyRecord = {
 };
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const MULTI_SURVEY_DRAFT_PREFIX = 'genesis-multi-survey-draft';
+
+type MultiSurveyDraft = {
+  profile: {
+    name: string;
+    directorate: string;
+  };
+  responses: Record<string, Record<string, string>>;
+  comments: Record<string, string>;
+};
+
+const getDraftKey = (blastGroupId: string) => `${MULTI_SURVEY_DRAFT_PREFIX}:${blastGroupId}`;
+
+const loadDraft = (key: string): MultiSurveyDraft | null => {
+  if (typeof window === 'undefined' || !key) return null;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) as MultiSurveyDraft : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveDraft = (key: string, draft: MultiSurveyDraft) => {
+  if (typeof window === 'undefined' || !key) return;
+  window.localStorage.setItem(key, JSON.stringify(draft));
+};
+
+const clearDraft = (key: string) => {
+  if (typeof window === 'undefined' || !key) return;
+  window.localStorage.removeItem(key);
+};
 
 const readErrorResponse = async (response: Response) => {
   const text = await response.text();
@@ -59,7 +91,9 @@ export default function MultiSurveyPage() {
   const [message, setMessage] = useState('Memuat daftar layanan...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isDraftReady, setIsDraftReady] = useState(false);
   const allowNavigationRef = useRef(false);
+  const draftKeyRef = useRef('');
   const pendingRecords = records.filter((record) => !record.submittedAt);
 
   useEffect(() => {
@@ -71,8 +105,20 @@ export default function MultiSurveyPage() {
         if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
 
         const groupRecords = payload.records ?? [];
+        const blastGroupId = groupRecords[0]?.blastGroupId ?? '';
+        const draftKey = blastGroupId ? getDraftKey(blastGroupId) : '';
+        const draft = loadDraft(draftKey);
+        draftKeyRef.current = draftKey;
         setRecords(groupRecords);
-        setProfile((current) => ({ ...current, name: groupRecords[0]?.personName ?? '' }));
+        setProfile((current) => ({
+          ...current,
+          name: draft?.profile.name ?? groupRecords[0]?.personName ?? '',
+          directorate: draft?.profile.directorate ?? current.directorate,
+        }));
+        if (draft) {
+          setResponses(draft.responses ?? {});
+          setComments(draft.comments ?? {});
+        }
         setSubmitted(groupRecords.length > 0 && groupRecords.every((record) => record.submittedAt));
         if (groupRecords.length > 0 && groupRecords.every((record) => record.submittedAt)) {
           allowNavigationRef.current = true;
@@ -80,8 +126,10 @@ export default function MultiSurveyPage() {
           return;
         }
         setMessage(groupRecords.length === 0 ? 'Tidak ada layanan untuk link ini.' : '');
+        setIsDraftReady(true);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Gagal mengambil daftar layanan.');
+        setIsDraftReady(true);
       }
     };
 
@@ -108,6 +156,15 @@ export default function MultiSurveyPage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [comments, profile.directorate, profile.name, responses, submitted]);
+
+  useEffect(() => {
+    if (!isDraftReady || !draftKeyRef.current || submitted) return;
+    saveDraft(draftKeyRef.current, {
+      profile,
+      responses,
+      comments,
+    });
+  }, [comments, isDraftReady, profile, responses, submitted]);
 
   const updateResponse = (recordId: string, questionKey: string, answer: string) => {
     setResponses((current) => ({
@@ -154,6 +211,7 @@ export default function MultiSurveyPage() {
       }));
 
       setSubmitted(true);
+      clearDraft(draftKeyRef.current);
       allowNavigationRef.current = true;
       window.location.assign(withBasePath('/submitted'));
       setResponses({});

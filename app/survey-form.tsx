@@ -17,6 +17,17 @@ type SurveyRecord = {
 };
 
 const SURVEY_STORAGE_KEY = 'genesis-survey-records';
+const SURVEY_DRAFT_PREFIX = 'genesis-survey-draft';
+
+type SurveyDraft = {
+  profile: {
+    name: string;
+    directorate: string;
+    serviceType: string;
+  };
+  responses: Record<string, string>;
+  comments: string;
+};
 
 const loadSurveyRecords = (): SurveyRecord[] => {
   if (typeof window === 'undefined') return [];
@@ -32,6 +43,33 @@ const saveSurveyRecord = (survey: SurveyRecord) => {
   if (typeof window === 'undefined') return;
   const records = loadSurveyRecords();
   window.localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify([survey, ...records]));
+};
+
+const getDraftKey = () => {
+  if (typeof window === 'undefined') return '';
+  const blastId = getBlastIdFromUrl();
+  const pathKey = window.location.pathname.replace(/^\/+|\/+$/g, '') || 'home';
+  return `${SURVEY_DRAFT_PREFIX}:${blastId || pathKey}`;
+};
+
+const loadSurveyDraft = (key: string): SurveyDraft | null => {
+  if (typeof window === 'undefined' || !key) return null;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) as SurveyDraft : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveSurveyDraft = (key: string, draft: SurveyDraft) => {
+  if (typeof window === 'undefined' || !key) return;
+  window.localStorage.setItem(key, JSON.stringify(draft));
+};
+
+const clearSurveyDraft = (key: string) => {
+  if (typeof window === 'undefined' || !key) return;
+  window.localStorage.removeItem(key);
 };
 
 const getBlastIdFromUrl = () => {
@@ -106,11 +144,25 @@ export default function HomePage() {
   const [submitMessage, setSubmitMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
+  const [isDraftReady, setIsDraftReady] = useState(false);
   const allowNavigationRef = useRef(false);
+  const draftKeyRef = useRef('');
 
   useEffect(() => {
     const serviceType = getServiceFromPath(window.location.pathname);
-    setProfile((current) => ({ ...current, serviceType }));
+    const draftKey = getDraftKey();
+    const draft = loadSurveyDraft(draftKey);
+    draftKeyRef.current = draftKey;
+    setProfile((current) => ({
+      ...current,
+      ...(draft?.profile ?? {}),
+      serviceType,
+    }));
+    if (draft) {
+      setResponses(draft.responses ?? {});
+      setComments(draft.comments ?? '');
+    }
+    setIsDraftReady(true);
 
     const checkSubmission = async () => {
       try {
@@ -130,6 +182,15 @@ export default function HomePage() {
 
     checkSubmission();
   }, []);
+
+  useEffect(() => {
+    if (!isDraftReady || !draftKeyRef.current || submitted || hasExistingSubmission) return;
+    saveSurveyDraft(draftKeyRef.current, {
+      profile,
+      responses,
+      comments,
+    });
+  }, [comments, hasExistingSubmission, isDraftReady, profile, responses, submitted]);
 
   useEffect(() => {
     const hasStartedSurvey = Boolean(
@@ -189,6 +250,7 @@ export default function HomePage() {
       saveSurveyRecord(survey);
       setSubmitted(true);
       setHasExistingSubmission(true);
+      clearSurveyDraft(draftKeyRef.current);
       allowNavigationRef.current = true;
       window.location.assign(withBasePath('/submitted'));
       setResponses({});
@@ -205,6 +267,7 @@ export default function HomePage() {
       if (message.includes('sudah pernah disubmit')) {
         setSubmitted(true);
         setHasExistingSubmission(true);
+        clearSurveyDraft(draftKeyRef.current);
         allowNavigationRef.current = true;
         window.location.assign(withBasePath('/submitted'));
       } else {
