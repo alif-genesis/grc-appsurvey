@@ -10,10 +10,17 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = getSupabase();
-  const query = supabase.from('blast_records').select('survey_link');
   const { data } = blastGroupId
-    ? await query.eq('blast_group_id', blastGroupId).limit(1).maybeSingle()
-    : await query.eq('id', blastId).maybeSingle();
+    ? await supabase
+      .from('blast_records')
+      .select('id, survey_link')
+      .eq('blast_group_id', blastGroupId)
+      .order('created_at', { ascending: true })
+    : await supabase
+      .from('blast_records')
+      .select('id, survey_link')
+      .eq('id', blastId)
+      .limit(1);
 
   const update = supabase
     .from('blast_records')
@@ -25,9 +32,11 @@ export async function GET(request: NextRequest) {
     await update.eq('id', blastId);
   }
 
-  const redirectUrl = blastGroupId
+  const rows = data ?? [];
+  const singleRow = rows.length === 1 ? rows[0] : null;
+  const redirectUrl = blastGroupId && rows.length > 1
     ? new URL('/multi-survey', request.url).toString()
-    : data?.survey_link || new URL('/', request.url).toString();
+    : singleRow?.survey_link || new URL('/', request.url).toString();
   const response = NextResponse.redirect(redirectUrl);
 
   if (blastGroupId) {
@@ -50,12 +59,22 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  response.cookies.set('genesis_blast_id', blastId || '', {
+  if (!blastId && singleRow?.id) {
+    response.cookies.set('genesis_blast_id', singleRow.id, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  }
+
+  response.cookies.set('genesis_blast_id', blastId || singleRow?.id || '', {
     httpOnly: false,
     sameSite: 'lax',
     secure: request.nextUrl.protocol === 'https:',
     path: '/',
-    maxAge: blastId ? 60 * 60 * 24 * 30 : 0,
+    maxAge: blastId || singleRow?.id ? 60 * 60 * 24 * 30 : 0,
   });
 
   return response;

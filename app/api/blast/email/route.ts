@@ -112,6 +112,14 @@ export async function POST(request: NextRequest) {
       }));
 
       try {
+        const { error: pendingInsertError } = await supabase.from('blast_records').insert(records.map((record) => ({
+          ...record,
+          send_status: 'Pending',
+          error: '',
+        })));
+
+        if (pendingInsertError) throw pendingInsertError;
+
         await transporter.sendMail({
           from: `"GRC Survey" <${from}>`,
           to: person.email,
@@ -120,14 +128,16 @@ export async function POST(request: NextRequest) {
           html: email.html,
         });
 
-        const { error: insertError } = await supabase.from('blast_records').insert(records.map((record) => ({
-          ...record,
+        const { error: updateError } = await supabase
+          .from('blast_records')
+          .update({
           send_status: 'Sukses',
           error: '',
           sent_at: sentAt,
-        })));
+          })
+          .eq('blast_group_id', blastGroupId);
 
-        if (insertError) throw insertError;
+        if (updateError) throw updateError;
 
         return records.map((record) => ({
           id: record.id,
@@ -143,11 +153,13 @@ export async function POST(request: NextRequest) {
         }));
       } catch (error) {
         const errorMessage = formatServerError(error, 'Email gagal dikirim.');
-        await supabase.from('blast_records').insert(records.map((record) => ({
-          ...record,
-          send_status: 'Gagal',
-          error: errorMessage,
-        })));
+        await supabase
+          .from('blast_records')
+          .update({
+            send_status: 'Gagal',
+            error: errorMessage,
+          })
+          .eq('blast_group_id', blastGroupId);
 
         return records.map((record) => ({
           id: record.id,
