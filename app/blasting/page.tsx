@@ -349,6 +349,26 @@ export default function BlastingPage() {
     }
   };
 
+  const downloadImportTemplate = () => {
+    const worksheet = XLSX.utils.json_to_sheet([
+      {
+        Nama: 'Alif Brazali',
+        WhatsApp: '085695763976',
+        Email: 'alif@example.com',
+        Layanan: serviceTypes.slice(0, 2).join(', '),
+      },
+      {
+        Nama: 'Anne',
+        WhatsApp: '085695763976',
+        Email: 'anne@example.com',
+        Layanan: serviceTypes[0] || '',
+      },
+    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template User');
+    XLSX.writeFile(workbook, 'template-import-user-blasting.xlsx');
+  };
+
   const startEditPerson = (person: BlastPerson) => {
     setEditDrafts((current) => ({
       ...current,
@@ -960,6 +980,9 @@ export default function BlastingPage() {
             <div className="import-help">
               <p>Gunakan kolom: Nama, WhatsApp, Email, Layanan.</p>
               <p>Untuk beberapa layanan, pisahkan dengan koma di kolom Layanan.</p>
+              <button type="button" className="download-button import-template-button" onClick={downloadImportTemplate}>
+                Download Template Excel
+              </button>
             </div>
 
             <label className="import-file-picker">

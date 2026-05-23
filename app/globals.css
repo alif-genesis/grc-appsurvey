@@ -865,6 +865,11 @@ select {
   font-weight: 700;
 }
 
+.import-template-button {
+  width: fit-content;
+  margin-top: 4px;
+}
+
 .import-file-picker {
   display: grid;
   gap: 8px;
