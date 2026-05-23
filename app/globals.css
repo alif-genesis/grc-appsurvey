@@ -74,13 +74,15 @@ select {
 }
 
 .landing-hero {
-  min-height: 100vh;
+  height: 100svh;
+  max-height: 100svh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 32px;
+  gap: clamp(12px, 2vh, 24px);
   width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 28px;
+  padding: clamp(14px, 2.4vh, 24px) 28px;
+  overflow: hidden;
 }
 
 .landing-nav {
@@ -91,7 +93,7 @@ select {
 }
 
 .landing-logo {
-  width: min(230px, 52vw);
+  width: clamp(150px, 13vw, 190px);
   height: auto;
 }
 
@@ -101,9 +103,9 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 46px;
+  min-height: 42px;
   border-radius: 999px;
-  padding: 12px 20px;
+  padding: 10px 18px;
   text-decoration: none;
   font-weight: 800;
 }
@@ -117,14 +119,14 @@ select {
 
 .landing-content {
   align-self: center;
-  max-width: 900px;
-  padding: 56px 0 28px;
+  max-width: min(780px, 70vw);
+  padding: 0;
 }
 
 .landing-eyebrow {
-  margin: 0 0 16px;
+  margin: 0 0 10px;
   color: #0f4eb8;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -133,18 +135,18 @@ select {
 .landing-content h1 {
   margin: 0;
   color: #0f172a;
-  font-size: clamp(2.55rem, 7vw, 5.9rem);
-  line-height: 0.98;
+  font-size: clamp(3.1rem, 5.4vw, 4.9rem);
+  line-height: 0.96;
   letter-spacing: 0;
-  max-width: 980px;
+  max-width: 800px;
 }
 
 .landing-content p:not(.landing-eyebrow) {
-  max-width: 740px;
-  margin: 24px 0 0;
+  max-width: 680px;
+  margin: 16px 0 0;
   color: #334155;
-  font-size: clamp(1.05rem, 2vw, 1.3rem);
-  line-height: 1.65;
+  font-size: clamp(0.98rem, 1.25vw, 1.12rem);
+  line-height: 1.48;
   font-weight: 650;
 }
 
@@ -152,7 +154,7 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  margin-top: 32px;
+  margin-top: 22px;
 }
 
 .landing-primary {
@@ -174,8 +176,8 @@ select {
 
 .landing-panel div {
   display: grid;
-  gap: 8px;
-  padding: 22px;
+  gap: 5px;
+  padding: 14px 20px;
   background: rgba(255, 255, 255, 0.88);
 }
 
@@ -186,13 +188,14 @@ select {
 
 .landing-panel strong {
   color: #0f172a;
-  font-size: 1.06rem;
+  font-size: 0.98rem;
 }
 
 .landing-panel p {
   margin: 0;
   color: #475569;
-  line-height: 1.5;
+  line-height: 1.32;
+  font-size: 0.9rem;
   font-weight: 650;
 }
 
@@ -1387,7 +1390,10 @@ select {
 
 @media (max-width: 900px) {
   .landing-hero {
-    min-height: auto;
+    height: auto;
+    max-height: none;
+    min-height: 100svh;
+    overflow: visible;
     padding: 20px;
     gap: 24px;
   }
@@ -1403,6 +1409,7 @@ select {
   }
 
   .landing-content {
+    max-width: none;
     padding: 34px 0 18px;
   }
 
