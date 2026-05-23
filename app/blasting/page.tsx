@@ -35,6 +35,8 @@ type BlastHistory = {
 type EmailBlastResult = Omit<BlastHistory, 'channel' | 'createdAt'>;
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
+const MAX_EMAIL_RECIPIENTS = 5;
+const EMAIL_BATCH_DELAY_MS = 3000;
 
 const emptyPerson = {
   name: '',
@@ -54,6 +56,10 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
     return fallback;
   }
 };
+
+const sleep = (ms: number) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
 
 const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
 const getMultiSurveyLink = () => withBasePath('/multi-survey');
@@ -406,30 +412,47 @@ export default function BlastingPage() {
     setBlastNotice('');
 
     try {
-      const response = await fetch(withBasePath('/api/blast/email'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipients }),
-      });
-      const payload = await response.json() as { results?: EmailBlastResult[]; error?: string };
+      const batches = Array.from(
+        { length: Math.ceil(recipients.length / MAX_EMAIL_RECIPIENTS) },
+        (_, index) => recipients.slice(index * MAX_EMAIL_RECIPIENTS, (index + 1) * MAX_EMAIL_RECIPIENTS),
+      );
+      const allRows: BlastHistory[] = [];
 
-      if (!response.ok) {
-        throw new Error(payload.error || 'Email blast gagal diproses.');
+      for (const [index, batch] of batches.entries()) {
+        setBlastNotice(`Mengirim batch ${index + 1}/${batches.length} (${batch.length} penerima)...`);
+
+        const response = await fetch(withBasePath('/api/blast/email'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipients: batch }),
+        });
+        const payload = await response.json() as { results?: EmailBlastResult[]; error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error || `Email blast batch ${index + 1} gagal diproses.`);
+        }
+
+        const now = new Date().toISOString();
+        const rows = (payload.results ?? []).map((result) => ({
+          channel: 'Email' as const,
+          createdAt: now,
+          ...result,
+        }));
+
+        allRows.push(...rows);
+        setHistory((current) => [...rows, ...current]);
+
+        if (index < batches.length - 1) {
+          setBlastNotice(`Batch ${index + 1}/${batches.length} selesai. Menunggu 3 detik sebelum batch berikutnya...`);
+          await sleep(EMAIL_BATCH_DELAY_MS);
+        }
       }
 
-      const now = new Date().toISOString();
-      const rows = (payload.results ?? []).map((result) => ({
-        channel: 'Email' as const,
-        createdAt: now,
-        ...result,
-      }));
-
-      setHistory((current) => [...rows, ...current]);
       refreshHistory();
 
-      const successCount = rows.filter((row) => row.status === 'Sukses').length;
-      const failedCount = rows.length - successCount;
-      setBlastNotice(`Email blast selesai: ${successCount} sukses, ${failedCount} gagal.`);
+      const successCount = allRows.filter((row) => row.status === 'Sukses').length;
+      const failedCount = allRows.length - successCount;
+      setBlastNotice(`Email blast selesai: ${successCount} sukses, ${failedCount} gagal/dilewati dari ${recipients.length} penerima.`);
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Email blast gagal diproses.');
     } finally {
@@ -480,10 +503,13 @@ export default function BlastingPage() {
           type="button"
           className="blast-action-card"
           onClick={startEmailBlast}
-          disabled={isEmailBlasting || blastTargets.every((person) => !person.email.trim())}
+          disabled={
+            isEmailBlasting
+            || blastTargets.every((person) => !person.email.trim())
+          }
         >
           <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
-          <small>{blastTargets.filter((person) => person.email.trim()).length} penerima siap</small>
+          <small>{blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch {MAX_EMAIL_RECIPIENTS} orang</small>
         </button>
         <button
           type="button"
