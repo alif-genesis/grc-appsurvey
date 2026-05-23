@@ -66,4 +66,27 @@ create policy "service role can manage blast records"
   using (auth.role() = 'service_role')
   with check (auth.role() = 'service_role');
 
+create table if not exists public.blast_people (
+  id text primary key,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  name text not null,
+  whatsapp text not null default '',
+  email text not null default '',
+  service_types jsonb not null default '[]'::jsonb
+);
+
+create index if not exists blast_people_created_at_idx
+  on public.blast_people (created_at desc);
+
+alter table public.blast_people enable row level security;
+
+drop policy if exists "service role can manage blast people" on public.blast_people;
+
+create policy "service role can manage blast people"
+  on public.blast_people
+  for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
 notify pgrst, 'reload schema';

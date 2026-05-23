@@ -52,11 +52,13 @@ export async function GET() {
     const checks = await Promise.all([
       supabase.from('survey_records').select('id').limit(1),
       supabase.from('blast_records').select('id').limit(1),
+      supabase.from('blast_people').select('id').limit(1),
     ]);
     const surveyError = checks[0].error;
     const blastError = checks[1].error;
+    const peopleError = checks[2].error;
 
-    if (surveyError || blastError) {
+    if (surveyError || blastError || peopleError) {
       return NextResponse.json({
         ok: false,
         env: {
@@ -66,6 +68,7 @@ export async function GET() {
         tables: {
           survey_records: surveyError ? formatError(surveyError) : 'bisa diakses',
           blast_records: blastError ? formatError(blastError) : 'bisa diakses',
+          blast_people: peopleError ? formatError(peopleError) : 'bisa diakses',
         },
       }, { status: 500 });
     }
@@ -79,6 +82,7 @@ export async function GET() {
       tables: {
         survey_records: 'bisa diakses',
         blast_records: 'bisa diakses',
+        blast_people: 'bisa diakses',
       },
     });
   } catch (error) {

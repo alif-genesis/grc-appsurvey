@@ -33,7 +33,6 @@ type BlastHistory = {
 type EmailBlastResult = Omit<BlastHistory, 'channel' | 'createdAt'>;
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
-const HISTORY_STORAGE_KEY = 'genesis-blasting-history';
 
 const emptyPerson = {
   name: '',
@@ -52,11 +51,6 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
   } catch {
     return fallback;
   }
-};
-
-const saveToStorage = <T,>(key: string, value: T) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(key, JSON.stringify(value));
 };
 
 const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
@@ -92,6 +86,8 @@ export default function BlastingPage() {
   const [history, setHistory] = useState<BlastHistory[]>([]);
   const [newPerson, setNewPerson] = useState(emptyPerson);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
+  const [isWhatsAppBlasting, setIsWhatsAppBlasting] = useState(false);
+  const [isPeopleLoading, setIsPeopleLoading] = useState(false);
   const [blastNotice, setBlastNotice] = useState('');
   const [peopleSearch, setPeopleSearch] = useState('');
   const [peopleServiceFilter, setPeopleServiceFilter] = useState('');
@@ -100,20 +96,9 @@ export default function BlastingPage() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
 
   useEffect(() => {
-    const storedPeople = loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []);
-    setPeople(storedPeople);
-    setSelectedPersonIds(storedPeople.map((person) => person.id));
-    setHistory(loadFromStorage<BlastHistory[]>(HISTORY_STORAGE_KEY, []));
+    loadPeople();
     refreshHistory();
   }, []);
-
-  useEffect(() => {
-    saveToStorage(PEOPLE_STORAGE_KEY, people);
-  }, [people]);
-
-  useEffect(() => {
-    saveToStorage(HISTORY_STORAGE_KEY, history);
-  }, [history]);
 
   const readyPeople = useMemo(
     () => people.filter((person) => person.name.trim() && getPersonServices(person).length > 0),
@@ -172,25 +157,105 @@ export default function BlastingPage() {
     }
   };
 
-  const addPerson = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const person: BlastPerson = {
-      id: createId(),
-      name: newPerson.name.trim(),
-      whatsapp: newPerson.whatsapp.trim(),
-      email: newPerson.email.trim(),
-      serviceTypes: newPerson.serviceTypes,
-    };
+  const readErrorResponse = async (response: Response, fallback: string) => {
+    try {
+      const payload = await response.json() as { error?: string };
+      return payload.error || fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
-    setPeople((current) => [person, ...current]);
-    setSelectedPersonIds((current) => [person.id, ...current]);
-    setNewPerson(emptyPerson);
+  const loadPeople = async () => {
+    setIsPeopleLoading(true);
+    try {
+      const response = await fetch(withBasePath('/api/blast/people'), { cache: 'no-store' });
+      const payload = await response.json() as { people?: BlastPerson[]; error?: string };
+
+      if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar orang.');
+
+      let loadedPeople = payload.people ?? [];
+      const storedPeople = loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []);
+
+      if (loadedPeople.length === 0 && storedPeople.length > 0) {
+        const migratedPeople = await Promise.all(storedPeople.map(async (person) => {
+          const migrationResponse = await fetch(withBasePath('/api/blast/people'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: person.name,
+              whatsapp: person.whatsapp,
+              email: person.email,
+              serviceTypes: getPersonServices(person),
+            }),
+          });
+          if (!migrationResponse.ok) return null;
+          const migrationPayload = await migrationResponse.json() as { person?: BlastPerson };
+          return migrationPayload.person ?? null;
+        }));
+        loadedPeople = migratedPeople.filter((person): person is BlastPerson => Boolean(person));
+        window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
+      }
+
+      setPeople(loadedPeople);
+      setSelectedPersonIds(loadedPeople.map((person) => person.id));
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil daftar orang.');
+    } finally {
+      setIsPeopleLoading(false);
+    }
+  };
+
+  const addPerson = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const response = await fetch(withBasePath('/api/blast/people'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPerson),
+      });
+      const payload = await response.json() as { person?: BlastPerson; error?: string };
+
+      if (!response.ok || !payload.person) {
+        throw new Error(payload.error || 'Gagal menambahkan orang.');
+      }
+
+      setPeople((current) => [payload.person as BlastPerson, ...current]);
+      setSelectedPersonIds((current) => [payload.person!.id, ...current]);
+      setNewPerson(emptyPerson);
+      setBlastNotice('User berhasil ditambahkan ke Supabase.');
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal menambahkan orang.');
+    }
   };
 
   const updatePerson = (id: string, field: keyof Omit<BlastPerson, 'id' | 'serviceTypes'>, value: string) => {
     setPeople((current) => current.map((person) => (
       person.id === id ? { ...person, [field]: value } : person
     )));
+  };
+
+  const savePerson = async (id: string, updates: Partial<Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'>>) => {
+    try {
+      const response = await fetch(withBasePath(`/api/blast/people/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorResponse(response, 'Gagal menyimpan perubahan user.'));
+      }
+
+      const payload = await response.json() as { person?: BlastPerson };
+      if (payload.person) {
+        setPeople((current) => current.map((person) => (
+          person.id === id ? payload.person as BlastPerson : person
+        )));
+      }
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal menyimpan perubahan user.');
+    }
   };
 
   const toggleNewPersonService = (service: string) => {
@@ -204,6 +269,7 @@ export default function BlastingPage() {
   };
 
   const togglePersonService = (id: string, service: string) => {
+    let nextServices: string[] = [];
     setPeople((current) => current.map((person) => {
       if (person.id !== id) return person;
       const currentServices = getPersonServices(person);
@@ -211,13 +277,27 @@ export default function BlastingPage() {
       const serviceList = exists
         ? currentServices.filter((item) => item !== service)
         : [...currentServices, service];
+      nextServices = serviceList;
       return { ...person, serviceTypes: serviceList };
     }));
+    if (nextServices.length > 0) {
+      savePerson(id, { serviceTypes: nextServices });
+    }
   };
 
-  const deletePerson = (id: string) => {
-    setPeople((current) => current.filter((person) => person.id !== id));
-    setSelectedPersonIds((current) => current.filter((personId) => personId !== id));
+  const deletePerson = async (id: string) => {
+    try {
+      const response = await fetch(withBasePath(`/api/blast/people/${id}`), { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error(await readErrorResponse(response, 'Gagal menghapus user.'));
+      }
+
+      setPeople((current) => current.filter((person) => person.id !== id));
+      setSelectedPersonIds((current) => current.filter((personId) => personId !== id));
+      setBlastNotice('User berhasil dihapus dari Supabase.');
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal menghapus user.');
+    }
   };
 
   const toggleSelectedPerson = (id: string) => {
@@ -233,7 +313,7 @@ export default function BlastingPage() {
     ));
   };
 
-  const startWhatsAppBlast = () => {
+  const startWhatsAppBlast = async () => {
     const now = new Date().toISOString();
     const rows = blastTargets
       .filter((person) => person.whatsapp.trim())
@@ -251,8 +331,29 @@ export default function BlastingPage() {
           sentAt: now,
         })));
 
-    setHistory((current) => [...rows, ...current]);
-    setBlastNotice(`${rows.length} blast WhatsApp dummy ditambahkan ke riwayat.`);
+    if (rows.length === 0) return;
+
+    setIsWhatsAppBlasting(true);
+    setBlastNotice('');
+
+    try {
+      const response = await fetch(withBasePath('/api/blast/history'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: rows }),
+      });
+      const payload = await response.json() as { records?: BlastHistory[]; error?: string };
+
+      if (!response.ok) throw new Error(payload.error || 'Gagal menyimpan riwayat WhatsApp.');
+
+      setHistory((current) => [...(payload.records ?? rows), ...current]);
+      refreshHistory();
+      setBlastNotice(`${rows.length} blast WhatsApp dummy disimpan ke Supabase.`);
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal menyimpan riwayat WhatsApp.');
+    } finally {
+      setIsWhatsAppBlasting(false);
+    }
   };
 
   const startEmailBlast = async () => {
@@ -345,9 +446,9 @@ export default function BlastingPage() {
           type="button"
           className="blast-action-card"
           onClick={startWhatsAppBlast}
-          disabled={blastTargets.every((person) => !person.whatsapp.trim())}
+          disabled={isWhatsAppBlasting || blastTargets.every((person) => !person.whatsapp.trim())}
         >
-          <span>Start Blast WhatsApp</span>
+          <span>{isWhatsAppBlasting ? 'Menyimpan WhatsApp...' : 'Start Blast WhatsApp'}</span>
           <small>{blastTargets.filter((person) => person.whatsapp.trim()).length} penerima siap</small>
         </button>
       </section>
@@ -356,7 +457,7 @@ export default function BlastingPage() {
       <section className="table-card blast-section">
         <div className="section-heading-row">
           <h2>User Management</h2>
-          <span>{selectedReadyPeople.length} dipilih dari {people.length} orang</span>
+          <span>{isPeopleLoading ? 'Memuat user...' : `${selectedReadyPeople.length} dipilih dari ${people.length} orang`}</span>
         </div>
 
         <div className="filter-row">
@@ -460,12 +561,14 @@ export default function BlastingPage() {
                       <input
                         value={person.name}
                         onChange={(event) => updatePerson(person.id, 'name', event.target.value)}
+                        onBlur={() => savePerson(person.id, { name: person.name })}
                       />
                     </td>
                     <td>
                       <input
                         value={person.whatsapp}
                         onChange={(event) => updatePerson(person.id, 'whatsapp', event.target.value)}
+                        onBlur={() => savePerson(person.id, { whatsapp: person.whatsapp })}
                       />
                     </td>
                     <td>
@@ -473,6 +576,7 @@ export default function BlastingPage() {
                         type="email"
                         value={person.email}
                         onChange={(event) => updatePerson(person.id, 'email', event.target.value)}
+                        onBlur={() => savePerson(person.id, { email: person.email })}
                       />
                     </td>
                     <td>

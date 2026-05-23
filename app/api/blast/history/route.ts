@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { formatServerError, getSupabase } from '../../../supabase-server';
 
 type BlastRow = {
@@ -53,6 +53,50 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json(
       { error: formatServerError(error, 'Gagal mengambil riwayat blast.') },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json() as { records?: Partial<ReturnType<typeof mapBlastRow>>[] };
+    const records = body.records ?? [];
+
+    if (records.length === 0) {
+      return NextResponse.json({ error: 'Tidak ada riwayat untuk disimpan.' }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('blast_records')
+      .insert(records.map((record) => ({
+        id: record.id || crypto.randomUUID(),
+        blast_group_id: record.blastGroupId || null,
+        created_at: record.createdAt || new Date().toISOString(),
+        channel: record.channel || 'WhatsApp',
+        person_name: record.personName || '',
+        whatsapp: record.whatsapp || '',
+        email: record.email || '',
+        service_type: record.serviceType || '',
+        survey_link: record.surveyLink || '',
+        message: record.message || '',
+        send_status: record.status || 'Sukses',
+        error: record.error || '',
+        sent_at: record.sentAt || null,
+        opened_at: record.openedAt || null,
+        clicked_at: record.clickedAt || null,
+        submitted_at: record.submittedAt || null,
+      })))
+      .select('id, blast_group_id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return NextResponse.json({ records: (data as BlastRow[]).map(mapBlastRow) });
+  } catch (error) {
+    return NextResponse.json(
+      { error: formatServerError(error, 'Gagal menyimpan riwayat blast.') },
       { status: 500 },
     );
   }
