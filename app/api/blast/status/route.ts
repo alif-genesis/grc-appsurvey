@@ -1,10 +1,11 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { formatServerError, getSupabase } from '../../../supabase-server';
+import { getSupabase } from '../../../supabase-server';
 
 export async function GET() {
-  const blastId = cookies().get('genesis_blast_id')?.value;
-  const blastGroupId = cookies().get('genesis_blast_group_id')?.value;
+  const cookieStore = await cookies();
+  const blastId = cookieStore.get('genesis_blast_id')?.value;
+  const blastGroupId = cookieStore.get('genesis_blast_group_id')?.value;
 
   if (!blastId && !blastGroupId) {
     return NextResponse.json({ submitted: false });
@@ -45,7 +46,7 @@ export async function GET() {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: formatServerError(error, 'Gagal mengecek status survey.') },
+      { error: 'Gagal mengecek status survey.' },
       { status: 500 },
     );
   }

@@ -10,9 +10,6 @@ export default function HomePage() {
             src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png"
             alt="PT Genetika Solusi Bisnis"
           />
-          <a className="landing-admin-link" href={withBasePath('/login')}>
-            Login Admin
-          </a>
         </nav>
 
         <div className="landing-content">

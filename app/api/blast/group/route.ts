@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { formatServerError, getSupabase } from '../../../supabase-server';
+import { getSupabase } from '../../../supabase-server';
 
 type BlastGroupRow = {
   id: string;
@@ -14,7 +14,8 @@ type BlastGroupRow = {
 };
 
 export async function GET() {
-  const blastGroupId = cookies().get('genesis_blast_group_id')?.value;
+  const cookieStore = await cookies();
+  const blastGroupId = cookieStore.get('genesis_blast_group_id')?.value;
 
   if (!blastGroupId) {
     return NextResponse.json({ error: 'Link survei multi layanan tidak ditemukan.' }, { status: 404 });
@@ -45,7 +46,7 @@ export async function GET() {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: formatServerError(error, 'Gagal mengambil data survei multi layanan.') },
+      { error: 'Gagal mengambil data survei multi layanan.' },
       { status: 500 },
     );
   }

@@ -27,9 +27,10 @@ const mapPersonRow = (row: BlastPersonRow) => ({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const body = await request.json() as {
       name?: string;
       whatsapp?: string;
@@ -56,7 +57,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from('blast_people')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .select('id, created_at, updated_at, name, whatsapp, email, service_types')
       .single();
 
@@ -73,14 +74,15 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = getSupabase();
     const { error } = await supabase
       .from('blast_people')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) throw error;
 

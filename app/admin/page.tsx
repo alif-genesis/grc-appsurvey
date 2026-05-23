@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { serviceTypes, withBasePath } from '../services';
 
 type SurveyRecord = {
@@ -30,6 +29,26 @@ const loadSurveyRecords = (): SurveyRecord[] => {
   } catch {
     return [];
   }
+};
+
+const escapeCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const downloadCsv = (rows: Record<string, unknown>[], filename: string) => {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.map(escapeCsvCell).join(','),
+    ...rows.map((row) => headers.map((header) => escapeCsvCell(row[header])).join(',')),
+  ].join('\n');
+  const blob = new Blob([`\uFEFF${csv}`], {
+    type: 'text/csv;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 export default function AdminPage() {
@@ -114,10 +133,7 @@ export default function AdminPage() {
       };
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Survei');
-    XLSX.writeFile(workbook, `report-survei-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadCsv(rows, `report-survei-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
   const downloadPDFReport = () => {
@@ -149,7 +165,7 @@ export default function AdminPage() {
       `${row.percent}%`,
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 160,
       head: [['No', 'Nama Layanan', 'Target', 'Respon', 'GAP', 'Persentase']],
       body,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { serviceTypes } from '../../services';
 import { formatServerError, getSupabase } from '../../supabase-server';
 
 type SurveyRecord = {
@@ -34,6 +35,7 @@ const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
   blastId: row.blast_id ?? undefined,
   blastGroupId: row.blast_group_id ?? undefined,
 });
+const allowedAnswers = new Set(['Sangat Tidak Puas', 'Tidak Puas', 'Puas', 'Sangat Puas']);
 
 export async function GET() {
   try {
@@ -49,7 +51,6 @@ export async function GET() {
       records: (data as SurveyRow[]).map(mapRowToRecord),
     });
   } catch (error) {
-    console.error('GET /api/surveys failed:', error);
     return NextResponse.json(
       { error: formatServerError(error, 'Gagal mengambil data survey.') },
       { status: 500 },
@@ -61,8 +62,34 @@ export async function POST(request: NextRequest) {
   try {
     const survey = await request.json() as SurveyRecord;
 
-    if (!survey.profile?.name || !survey.profile?.directorate || !survey.profile?.serviceType) {
+    if (!survey.profile?.name?.trim() || !survey.profile?.directorate?.trim() || !survey.profile?.serviceType?.trim()) {
       return NextResponse.json({ error: 'Profil survey belum lengkap.' }, { status: 400 });
+    }
+    const profile = {
+      name: survey.profile.name.trim(),
+      directorate: survey.profile.directorate.trim(),
+      serviceType: survey.profile.serviceType.trim(),
+    };
+    const comments = survey.comments?.trim() || '';
+
+    if (!serviceTypes.includes(profile.serviceType)) {
+      return NextResponse.json({ error: 'Jenis layanan tidak valid.' }, { status: 400 });
+    }
+    if (!comments) {
+      return NextResponse.json({ error: 'Kritik dan saran wajib diisi.' }, { status: 400 });
+    }
+    if (profile.name.length > 160 || profile.directorate.length > 160 || comments.length > 2000) {
+      return NextResponse.json({ error: 'Data survey melebihi batas panjang yang diperbolehkan.' }, { status: 400 });
+    }
+    if (!survey.responses || Object.keys(survey.responses).length === 0 || Object.keys(survey.responses).length > 80) {
+      return NextResponse.json({ error: 'Jawaban survey tidak valid.' }, { status: 400 });
+    }
+    const responses = Object.fromEntries(Object.entries(survey.responses).map(([key, value]) => [
+      String(key).slice(0, 80),
+      String(value),
+    ]));
+    if (Object.values(responses).some((answer) => !allowedAnswers.has(answer))) {
+      return NextResponse.json({ error: 'Jawaban survey tidak valid.' }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -80,11 +107,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { error } = await supabase.from('survey_records').insert({
-      id: survey.id,
-      created_at: survey.createdAt,
-      profile: survey.profile,
-      responses: survey.responses,
-      comments: survey.comments,
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
+      profile,
+      responses,
+      comments,
       blast_id: survey.blastId || null,
       blast_group_id: survey.blastGroupId || null,
     });
@@ -103,10 +130,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('POST /api/surveys failed:', error);
     return NextResponse.json(
       {
-        error: formatServerError(error, 'Survey gagal disimpan. Cek /api/debug/supabase untuk detail koneksi database.'),
+        error: 'Survey gagal disimpan.',
       },
       { status: 500 },
     );

@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { serviceToSlug, serviceTypes, withBasePath } from '../services';
 
 type BlastPerson = {
@@ -66,6 +65,60 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
+
+const escapeCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const parseCsv = (text: string) => {
+  const rows: string[][] = [];
+  let current = '';
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      row.push(current);
+      current = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') index += 1;
+      row.push(current);
+      if (row.some((cell) => cell.trim())) rows.push(row);
+      row = [];
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  row.push(current);
+  if (row.some((cell) => cell.trim())) rows.push(row);
+  return rows;
+};
+
+const downloadCsv = (rows: Record<string, unknown>[], filename: string) => {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.map(escapeCsvCell).join(','),
+    ...rows.map((row) => headers.map((header) => escapeCsvCell(row[header])).join(',')),
+  ].join('\n');
+  const blob = new Blob([`\uFEFF${csv}`], {
+    type: 'text/csv;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
 const getMultiSurveyLink = () => withBasePath('/multi-survey');
@@ -325,10 +378,13 @@ export default function BlastingPage() {
     setImportMessage('');
 
     try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+      const text = await file.text();
+      const csvRows = parseCsv(text);
+      const headers = csvRows[0] ?? [];
+      const rows = csvRows.slice(1).map((cells) => headers.reduce<Record<string, unknown>>((acc, header, index) => {
+        acc[header] = cells[index] ?? '';
+        return acc;
+      }, {}));
       const parsedRows = rows.map((row, index) => ({
         rowNumber: index + 2,
         name: getImportValue(row, ['nama', 'name', 'nama lengkap', 'namalengkap']),
@@ -341,7 +397,7 @@ export default function BlastingPage() {
       setImportMessage(`${parsedRows.length} data siap diimport dari ${rows.length} baris Excel.`);
     } catch (error) {
       setImportRows([]);
-      setImportMessage(error instanceof Error ? error.message : 'File Excel gagal dibaca.');
+      setImportMessage(error instanceof Error ? error.message : 'File CSV gagal dibaca.');
     }
   };
 
@@ -384,7 +440,7 @@ export default function BlastingPage() {
   };
 
   const downloadImportTemplate = () => {
-    const worksheet = XLSX.utils.json_to_sheet([
+    downloadCsv([
       {
         Nama: 'Alif Brazali',
         WhatsApp: '085695763976',
@@ -397,10 +453,7 @@ export default function BlastingPage() {
         Email: 'anne@example.com',
         Layanan: serviceTypes[0] || '',
       },
-    ]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template User');
-    XLSX.writeFile(workbook, 'template-import-user-blasting.xlsx');
+    ], 'template-import-user-blasting.csv');
   };
 
   const startEditPerson = (person: BlastPerson) => {
@@ -524,10 +577,6 @@ export default function BlastingPage() {
     setSelectedPersonIds((current) => (
       readyIds.every((id) => current.includes(id)) ? [] : readyIds
     ));
-  };
-
-  const clearSelectedPeople = () => {
-    setSelectedPersonIds([]);
   };
 
   const startWhatsAppBlast = async () => {
@@ -719,11 +768,6 @@ export default function BlastingPage() {
             <button type="button" className="text-button" onClick={() => setIsImportOpen(true)}>
               Import Excel
             </button>
-            {selectedPersonIds.length > 0 && (
-              <button type="button" className="text-button danger-button" onClick={clearSelectedPeople}>
-                Uncheck Semua
-              </button>
-            )}
           </div>
         </div>
 
@@ -1034,15 +1078,15 @@ export default function BlastingPage() {
               <p>Gunakan kolom: Nama, WhatsApp, Email, Layanan.</p>
               <p>Untuk beberapa layanan, pisahkan dengan koma di kolom Layanan.</p>
               <button type="button" className="download-button import-template-button" onClick={downloadImportTemplate}>
-                Download Template Excel
+                Download Template CSV
               </button>
             </div>
 
             <label className="import-file-picker">
-              Pilih file Excel
+              Pilih file CSV
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".csv,text/csv"
                 onChange={(event) => handleImportFile(event.target.files?.[0])}
                 disabled={isImporting}
               />

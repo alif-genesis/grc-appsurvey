@@ -7,7 +7,7 @@ import { withBasePath } from '../services';
 function LoginForm() {
   const searchParams = useSearchParams();
   const nextPath = useMemo(() => searchParams.get('next') || '/admin', [searchParams]);
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,7 +65,6 @@ function LoginForm() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
-              placeholder="admin123"
               required
             />
           </label>
