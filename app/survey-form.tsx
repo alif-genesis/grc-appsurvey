@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { getServiceFromPath, withBasePath } from './services';
 
 type SurveyRecord = {
@@ -106,6 +106,7 @@ export default function HomePage() {
   const [submitMessage, setSubmitMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
+  const allowNavigationRef = useRef(false);
 
   useEffect(() => {
     const serviceType = getServiceFromPath(window.location.pathname);
@@ -119,7 +120,8 @@ export default function HomePage() {
         if (response.ok && payload.submitted) {
           setHasExistingSubmission(true);
           setSubmitted(true);
-          setSubmitMessage('Survey dari link ini sudah pernah disubmit. Terima kasih.');
+          allowNavigationRef.current = true;
+          window.location.assign(withBasePath('/submitted'));
         }
       } catch {
         // Status check is a convenience guard; submit API still prevents duplicates.
@@ -128,6 +130,27 @@ export default function HomePage() {
 
     checkSubmission();
   }, []);
+
+  useEffect(() => {
+    const hasStartedSurvey = Boolean(
+      profile.name.trim()
+      || profile.directorate.trim()
+      || Object.keys(responses).length > 0
+      || comments.trim(),
+    );
+
+    if (!hasStartedSurvey || submitted || hasExistingSubmission) return undefined;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowNavigationRef.current) return undefined;
+      event.preventDefault();
+      event.returnValue = 'Anda belum menyelesaikan survey. Anda yakin ingin menutup halaman ini?';
+      return event.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [comments, hasExistingSubmission, profile.directorate, profile.name, responses, submitted]);
 
   const handleProfileChange = (field: keyof typeof profile, value: string) => {
     setProfile((current) => ({ ...current, [field]: value }));
@@ -166,7 +189,8 @@ export default function HomePage() {
       saveSurveyRecord(survey);
       setSubmitted(true);
       setHasExistingSubmission(true);
-      setSubmitMessage('Terima kasih! Survei Anda telah tersimpan.');
+      allowNavigationRef.current = true;
+      window.location.assign(withBasePath('/submitted'));
       setResponses({});
       setComments('');
       setProfile({
@@ -181,7 +205,8 @@ export default function HomePage() {
       if (message.includes('sudah pernah disubmit')) {
         setSubmitted(true);
         setHasExistingSubmission(true);
-        setSubmitMessage('Survey dari link ini sudah pernah disubmit. Terima kasih.');
+        allowNavigationRef.current = true;
+        window.location.assign(withBasePath('/submitted'));
       } else {
         setSubmitMessage(`${message} Data sementara tersimpan di browser ini, tapi belum masuk dashboard admin.`);
       }
@@ -214,7 +239,7 @@ export default function HomePage() {
             <ol>
               <li>Pilih layanan yang pernah Anda terima melalui halaman daftar layanan atau tautan survei yang dikirimkan.</li>
               <li>Pastikan kolom Jenis Layanan sudah sesuai dengan layanan yang akan dinilai sebelum mengisi survei.</li>
-              <li>Lengkapi profil, berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Simpan Survei]</strong>.</li>
+              <li>Lengkapi profil, berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Submit]</strong>.</li>
               <li>Jangka waktu pengisian survei adalah 1 Juni 2026 s.d. 30 Juni 2026.</li>
             </ol>
             <p className="note">Catatan: Responden wajib mengisi survei secara objektif. Partisipasi Anda dalam survei ini sangat berharga bagi kami.</p>
@@ -333,18 +358,15 @@ export default function HomePage() {
           <div className="comment-section">
             <label>
               Apabila terdapat kritik, saran, atau masukan dapat disampaikan melalui kolom di bawah ini
-              <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Tulis masukan Anda..." />
+              <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Tulis masukan Anda..." required />
             </label>
           </div>
 
           <button className="submit-button" type="submit" disabled={isSubmitting || hasExistingSubmission}>
-            {hasExistingSubmission ? 'SURVEI SUDAH DISIMPAN' : isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SURVEI'}
+            {hasExistingSubmission ? 'SURVEI SUDAH DISUBMIT' : isSubmitting ? 'MENYIMPAN...' : 'SUBMIT'}
           </button>
           {submitMessage && (
             <p className={submitted ? 'success-message' : 'error-message'}>{submitMessage}</p>
-          )}
-          {submitted && (
-            <a className="admin-link post-submit-link" href={withBasePath('/')}>Kembali ke Pilih Layanan</a>
           )}
         </section>
       </form>

@@ -19,6 +19,38 @@ body {
   background: linear-gradient(180deg, #f5f8ff 0%, #eef3f8 100%);
 }
 
+.submitted-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.submitted-panel {
+  width: min(560px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
+  padding: 36px 24px;
+}
+
+.submitted-panel h1 {
+  margin: 8px 0 0;
+  color: #0f172a;
+  font-size: 2rem;
+}
+
+.submitted-panel p {
+  margin: 0;
+  color: #475569;
+  font-weight: 600;
+}
+
 button,
 input,
 textarea,

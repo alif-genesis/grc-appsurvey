@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   antiCorruptionOptions,
   antiCorruptionQuestions,
@@ -59,6 +59,7 @@ export default function MultiSurveyPage() {
   const [message, setMessage] = useState('Memuat daftar layanan...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const allowNavigationRef = useRef(false);
   const pendingRecords = records.filter((record) => !record.submittedAt);
 
   useEffect(() => {
@@ -73,11 +74,12 @@ export default function MultiSurveyPage() {
         setRecords(groupRecords);
         setProfile((current) => ({ ...current, name: groupRecords[0]?.personName ?? '' }));
         setSubmitted(groupRecords.length > 0 && groupRecords.every((record) => record.submittedAt));
-        setMessage(groupRecords.length === 0
-          ? 'Tidak ada layanan untuk link ini.'
-          : groupRecords.every((record) => record.submittedAt)
-            ? 'Seluruh survei dari link ini sudah pernah disubmit. Terima kasih.'
-            : '');
+        if (groupRecords.length > 0 && groupRecords.every((record) => record.submittedAt)) {
+          allowNavigationRef.current = true;
+          window.location.assign(withBasePath('/submitted'));
+          return;
+        }
+        setMessage(groupRecords.length === 0 ? 'Tidak ada layanan untuk link ini.' : '');
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Gagal mengambil daftar layanan.');
       }
@@ -85,6 +87,27 @@ export default function MultiSurveyPage() {
 
     loadGroup();
   }, []);
+
+  useEffect(() => {
+    const hasStartedSurvey = Boolean(
+      profile.name.trim()
+      || profile.directorate.trim()
+      || Object.keys(responses).length > 0
+      || Object.values(comments).some((comment) => comment.trim()),
+    );
+
+    if (!hasStartedSurvey || submitted) return undefined;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowNavigationRef.current) return undefined;
+      event.preventDefault();
+      event.returnValue = 'Anda belum menyelesaikan survey. Anda yakin ingin menutup halaman ini?';
+      return event.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [comments, profile.directorate, profile.name, responses, submitted]);
 
   const updateResponse = (recordId: string, questionKey: string, answer: string) => {
     setResponses((current) => ({
@@ -131,7 +154,8 @@ export default function MultiSurveyPage() {
       }));
 
       setSubmitted(true);
-      setMessage('Terima kasih! Seluruh survei layanan telah tersimpan.');
+      allowNavigationRef.current = true;
+      window.location.assign(withBasePath('/submitted'));
       setResponses({});
       setComments({});
     } catch (error) {
@@ -167,7 +191,7 @@ export default function MultiSurveyPage() {
               <li>Pastikan nama layanan pada setiap bagian sudah sesuai dengan layanan yang pernah Anda terima.</li>
               <li>Lengkapi profil satu kali pada panel ini.</li>
               <li>Isi seluruh pertanyaan pada setiap layanan yang tampil.</li>
-              <li>Klik <strong>[Simpan Semua Survei]</strong> setelah seluruh layanan selesai dinilai.</li>
+              <li>Klik <strong>[Submit]</strong> setelah seluruh layanan selesai dinilai.</li>
               <li>Jangka waktu pengisian survei adalah 1 Juni 2026 s.d. 30 Juni 2026.</li>
             </ol>
           </div>
@@ -286,6 +310,7 @@ export default function MultiSurveyPage() {
                     value={comments[record.id] ?? ''}
                     onChange={(event) => updateComment(record.id, event.target.value)}
                     placeholder="Tulis masukan Anda..."
+                    required
                   />
                 </label>
               </div>
@@ -293,13 +318,10 @@ export default function MultiSurveyPage() {
           ))}
 
           <button className="submit-button" type="submit" disabled={isSubmitting || pendingRecords.length === 0}>
-            {pendingRecords.length === 0 ? 'SURVEI SUDAH DISIMPAN' : isSubmitting ? 'MENYIMPAN...' : 'SIMPAN SEMUA SURVEI'}
+            {pendingRecords.length === 0 ? 'SURVEI SUDAH DISUBMIT' : isSubmitting ? 'MENYIMPAN...' : 'SUBMIT'}
           </button>
           {message && (
             <p className={submitted ? 'success-message' : 'error-message'}>{message}</p>
-          )}
-          {submitted && (
-            <a className="admin-link post-submit-link" href={withBasePath('/')}>Kembali ke Pilih Layanan</a>
           )}
         </section>
       </form>
