@@ -1,36 +1,53 @@
-import { serviceToSlug, serviceTypes, withBasePath } from './services';
-
-const getServiceUrl = (service: string) => withBasePath(`/${serviceToSlug(service)}`);
+import { withBasePath } from './services';
 
 export default function HomePage() {
   return (
-    <main className="page-shell">
-      <div className="survey-header admin-header">
-        <div className="brand-block">
+    <main className="landing-page">
+      <section className="landing-hero">
+        <nav className="landing-nav" aria-label="Navigasi utama">
           <img
-            className="brand-image"
+            className="landing-logo"
             src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png"
-            alt="Genesis"
+            alt="PT Genetika Solusi Bisnis"
           />
-          <div className="admin-brand-text">
-            <p className="agency">Survei Kepuasan Layanan</p>
-            <h1>Pilih Layanan yang Anda Terima</h1>
+          <a className="landing-admin-link" href={withBasePath('/login')}>
+            Login Admin
+          </a>
+        </nav>
+
+        <div className="landing-content">
+          <p className="landing-eyebrow">Survei Kepuasan Layanan</p>
+          <h1>Selamat datang di Aplikasi Survey PT. Genetika Solusi Bisnis</h1>
+          <p>
+            Platform terpadu untuk mengelola survei layanan, memantau respons,
+            dan mengirim undangan pengisian survei secara lebih tertib.
+          </p>
+          <div className="landing-actions">
+            <a className="landing-primary" href={withBasePath('/list')}>
+              Pilih Layanan
+            </a>
+            <a className="landing-secondary" href={withBasePath('/admin')}>
+              Admin Dashboard
+            </a>
           </div>
         </div>
-      </div>
 
-      <section className="table-card">
-        <h2>Daftar Layanan</h2>
-        <div className="service-link-list">
-          {serviceTypes.map((service, index) => (
-            <a key={service} className="service-link-item" href={getServiceUrl(service)}>
-              <span className="service-link-number">{index + 1}</span>
-              <span className="service-link-content">
-                <strong>{service}</strong>
-                <small>Isi survei untuk layanan ini</small>
-              </span>
-            </a>
-          ))}
+        <div className="landing-panel" aria-label="Ringkasan aplikasi">
+          <div>
+            <span>01</span>
+            <strong>Pilih layanan</strong>
+            <p>Akses daftar layanan survei melalui halaman khusus.</p>
+          </div>
+          <div>
+            <span>02</span>
+            <strong>Isi survei</strong>
+            <p>Responden mengisi penilaian layanan dan saran perbaikan.</p>
+          </div>
+          <div>
+            <span>03</span>
+            <strong>Monitor hasil</strong>
+            <p>Admin memantau respons, target, dan riwayat blast.</p>
+          </div>
         </div>
       </section>
     </main>

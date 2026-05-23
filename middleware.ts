@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const ADMIN_COOKIE = 'grc_admin_session';
 const ADMIN_COOKIE_VALUE = 'authenticated';
 
-const protectedPagePaths = ['/admin', '/blasting'];
+const protectedPagePaths = ['/admin', '/blasting', '/list'];
 const protectedApiPaths = [
   '/api/blast/email',
   '/api/blast/history',
@@ -46,5 +46,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/blasting/:path*', '/api/surveys', '/api/blast/:path*'],
+  matcher: ['/admin/:path*', '/blasting/:path*', '/list/:path*', '/api/surveys', '/api/blast/:path*'],
 };

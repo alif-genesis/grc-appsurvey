@@ -41,6 +41,8 @@ type ImportPerson = Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTy
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
 const MAX_EMAIL_RECIPIENTS = 5;
 const EMAIL_BATCH_DELAY_MS = 3000;
+const WHATSAPP_BATCH_SIZE = 5;
+const WHATSAPP_BATCH_DELAY_MS = 3000;
 
 const emptyPerson = {
   name: '',
@@ -67,6 +69,10 @@ const sleep = (ms: number) => new Promise((resolve) => {
 
 const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
 const getMultiSurveyLink = () => withBasePath('/multi-survey');
+const getAbsoluteLink = (path: string) => {
+  if (typeof window === 'undefined') return path;
+  return new URL(path, window.location.origin).toString();
+};
 
 const getPersonServices = (person: Pick<BlastPerson, 'serviceType' | 'serviceTypes'>) => (
   person.serviceTypes?.length ? person.serviceTypes : person.serviceType ? [person.serviceType] : []
@@ -78,6 +84,34 @@ const buildMessage = (person: BlastPerson, channel: BlastHistory['channel']) => 
   const target = channel === 'WhatsApp' ? person.whatsapp : person.email;
   return `Halo ${person.name}, mohon isi survei ${services.join(', ')} melalui link ${link}. Dikirim ke ${target}.`;
 };
+
+const normalizeWhatsAppNumber = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+  return digits;
+};
+
+const buildWhatsAppText = (person: BlastPerson) => {
+  const services = getPersonServices(person);
+  const link = services.length > 1
+    ? getAbsoluteLink(getMultiSurveyLink())
+    : getAbsoluteLink(getSurveyLink(services[0]));
+
+  return [
+    `Halo ${person.name},`,
+    '',
+    'Mohon kesediaannya untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi untuk layanan berikut:',
+    ...services.map((service, index) => `${index + 1}. ${service}`),
+    '',
+    `Link survei: ${link}`,
+    '',
+    'Terima kasih.',
+  ].join('\n');
+};
+
+const getWhatsAppWebLink = (person: BlastPerson) => (
+  `https://wa.me/${normalizeWhatsAppNumber(person.whatsapp)}?text=${encodeURIComponent(buildWhatsAppText(person))}`
+);
 
 const formatDateTime = (value?: string | null) => (
   value ? new Date(value).toLocaleString('id-ID') : '-'
@@ -498,8 +532,9 @@ export default function BlastingPage() {
 
   const startWhatsAppBlast = async () => {
     const now = new Date().toISOString();
+    const whatsappTargets = blastTargets.filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10);
     const rows = blastTargets
-      .filter((person) => person.whatsapp.trim())
+      .filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10)
       .flatMap((person) => getPersonServices(person).map((serviceType) => ({
           id: createId(),
           channel: 'WhatsApp' as const,
@@ -517,7 +552,7 @@ export default function BlastingPage() {
     if (rows.length === 0) return;
 
     setIsWhatsAppBlasting(true);
-    setBlastNotice('');
+    setBlastNotice('Menyiapkan WhatsApp Web...');
 
     try {
       const response = await fetch(withBasePath('/api/blast/history'), {
@@ -530,8 +565,26 @@ export default function BlastingPage() {
       if (!response.ok) throw new Error(payload.error || 'Gagal menyimpan riwayat WhatsApp.');
 
       setHistory((current) => [...(payload.records ?? rows), ...current]);
+
+      const batches = Array.from(
+        { length: Math.ceil(whatsappTargets.length / WHATSAPP_BATCH_SIZE) },
+        (_, index) => whatsappTargets.slice(index * WHATSAPP_BATCH_SIZE, (index + 1) * WHATSAPP_BATCH_SIZE),
+      );
+
+      for (const [index, batch] of batches.entries()) {
+        setBlastNotice(`Membuka WhatsApp Web batch ${index + 1}/${batches.length} (${batch.length} orang)...`);
+        batch.forEach((person) => {
+          window.open(getWhatsAppWebLink(person), '_blank', 'noopener,noreferrer');
+        });
+
+        if (index < batches.length - 1) {
+          setBlastNotice(`Batch ${index + 1}/${batches.length} dibuka. Menunggu 3 detik sebelum batch berikutnya...`);
+          await sleep(WHATSAPP_BATCH_DELAY_MS);
+        }
+      }
+
       refreshHistory();
-      setBlastNotice(`${rows.length} blast WhatsApp dummy disimpan ke Supabase.`);
+      setBlastNotice(`${whatsappTargets.length} chat WhatsApp Web dibuka per batch ${WHATSAPP_BATCH_SIZE}. Pesan sudah terisi, tinggal review/kirim di WhatsApp.`);
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal menyimpan riwayat WhatsApp.');
     } finally {
@@ -628,7 +681,7 @@ export default function BlastingPage() {
       <div className="admin-link-row">
         <div className="admin-actions">
           <a className="admin-link" href={withBasePath('/admin')}>Kembali ke Admin</a>
-          <a className="admin-link" href={withBasePath('/')}>Pilih Layanan</a>
+          <a className="admin-link" href={withBasePath('/list')}>Pilih Layanan</a>
           <a className="admin-link secondary-admin-link" href={withBasePath('/api/logout')}>Logout</a>
         </div>
       </div>
@@ -650,10 +703,10 @@ export default function BlastingPage() {
           type="button"
           className="blast-action-card"
           onClick={startWhatsAppBlast}
-          disabled={isWhatsAppBlasting || blastTargets.every((person) => !person.whatsapp.trim())}
+          disabled={isWhatsAppBlasting || blastTargets.every((person) => normalizeWhatsAppNumber(person.whatsapp).length < 10)}
         >
-          <span>{isWhatsAppBlasting ? 'Menyimpan WhatsApp...' : 'Start Blast WhatsApp'}</span>
-          <small>{blastTargets.filter((person) => person.whatsapp.trim()).length} penerima siap</small>
+          <span>{isWhatsAppBlasting ? 'Membuka WhatsApp...' : 'Start Blast WhatsApp'}</span>
+          <small>{blastTargets.filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10).length} penerima siap, batch {WHATSAPP_BATCH_SIZE} orang</small>
         </button>
       </section>
       {blastNotice && <p className="blast-notice">{blastNotice}</p>}
