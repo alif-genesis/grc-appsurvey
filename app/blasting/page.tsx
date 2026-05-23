@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { serviceToSlug, serviceTypes, withBasePath } from '../services';
 
 type BlastPerson = {
@@ -33,6 +34,9 @@ type BlastHistory = {
 };
 
 type EmailBlastResult = Omit<BlastHistory, 'channel' | 'createdAt'>;
+type ImportPerson = Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'> & {
+  rowNumber: number;
+};
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
 const MAX_EMAIL_RECIPIENTS = 5;
@@ -88,12 +92,54 @@ const getMonitoringStatus = (row: BlastHistory) => {
   return 'Belum terkirim';
 };
 
+const normalizeColumnName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeServiceName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const getImportValue = (row: Record<string, unknown>, aliases: string[]) => {
+  const aliasSet = new Set(aliases.map(normalizeColumnName));
+  const match = Object.entries(row).find(([key]) => aliasSet.has(normalizeColumnName(key)));
+  return match ? String(match[1] ?? '').trim() : '';
+};
+
+const parseImportServices = (row: Record<string, unknown>) => {
+  const serviceAliases = new Set(['layanan', 'jenislayanan', 'service', 'servicetype'].map(normalizeColumnName));
+  const serviceSource = Object.entries(row)
+    .filter(([key]) => serviceAliases.has(normalizeColumnName(key)))
+    .map(([, value]) => String(value ?? ''))
+    .join(',');
+  const serviceCandidates = serviceSource.split(/[,;|\n]/g).map((item) => item.trim()).filter(Boolean);
+
+  Object.entries(row).forEach(([key, value]) => {
+    const normalizedKey = normalizeServiceName(key);
+    const serviceFromHeader = serviceTypes.find((service) => (
+      normalizeServiceName(service) === normalizedKey || serviceToSlug(service) === key.trim().toLowerCase()
+    ));
+    const isChecked = ['1', 'yes', 'ya', 'true', 'x', 'v'].includes(String(value ?? '').trim().toLowerCase());
+
+    if (serviceFromHeader && isChecked) {
+      serviceCandidates.push(serviceFromHeader);
+    }
+  });
+
+  return Array.from(new Set(serviceCandidates.map((candidate) => (
+    serviceTypes.find((service) => (
+      normalizeServiceName(service) === normalizeServiceName(candidate)
+      || serviceToSlug(service) === candidate.toLowerCase().trim()
+    ))
+  )).filter((service): service is string => Boolean(service))));
+};
+
 export default function BlastingPage() {
   const [people, setPeople] = useState<BlastPerson[]>([]);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
   const [newPerson, setNewPerson] = useState(emptyPerson);
   const [editDrafts, setEditDrafts] = useState<Record<string, BlastPersonDraft>>({});
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<ImportPerson[]>([]);
+  const [importFileName, setImportFileName] = useState('');
+  const [importMessage, setImportMessage] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
   const [isWhatsAppBlasting, setIsWhatsAppBlasting] = useState(false);
   const [isPeopleLoading, setIsPeopleLoading] = useState(false);
@@ -235,6 +281,71 @@ export default function BlastingPage() {
       setBlastNotice('User berhasil ditambahkan ke Supabase.');
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal menambahkan orang.');
+    }
+  };
+
+  const handleImportFile = async (file?: File | null) => {
+    if (!file) return;
+
+    setImportFileName(file.name);
+    setImportMessage('');
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+      const parsedRows = rows.map((row, index) => ({
+        rowNumber: index + 2,
+        name: getImportValue(row, ['nama', 'name', 'nama lengkap', 'namalengkap']),
+        whatsapp: getImportValue(row, ['whatsapp', 'wa', 'no whatsapp', 'nowhatsapp', 'nomor whatsapp', 'phone', 'telepon']),
+        email: getImportValue(row, ['email', 'alamat email', 'alamatemail', 'e-mail']),
+        serviceTypes: parseImportServices(row),
+      })).filter((row) => row.name && row.serviceTypes.length > 0);
+
+      setImportRows(parsedRows);
+      setImportMessage(`${parsedRows.length} data siap diimport dari ${rows.length} baris Excel.`);
+    } catch (error) {
+      setImportRows([]);
+      setImportMessage(error instanceof Error ? error.message : 'File Excel gagal dibaca.');
+    }
+  };
+
+  const submitImportPeople = async () => {
+    if (importRows.length === 0) return;
+
+    setIsImporting(true);
+    setImportMessage('Mengimport data ke Supabase...');
+
+    try {
+      const importedPeople: BlastPerson[] = [];
+      let failedCount = 0;
+
+      for (const row of importRows) {
+        const response = await fetch(withBasePath('/api/blast/people'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(row),
+        });
+        const payload = await response.json() as { person?: BlastPerson };
+
+        if (response.ok && payload.person) {
+          importedPeople.push(payload.person);
+        } else {
+          failedCount += 1;
+        }
+      }
+
+      setPeople((current) => [...importedPeople, ...current]);
+      setSelectedPersonIds((current) => [...importedPeople.map((person) => person.id), ...current]);
+      setImportRows([]);
+      setImportFileName('');
+      setImportMessage(`Sukses import ${importedPeople.length} user${failedCount ? `, ${failedCount} gagal` : ''}. Data sudah masuk tabel.`);
+      setBlastNotice(`Import Excel selesai: ${importedPeople.length} user masuk ke Supabase.`);
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'Import Excel gagal diproses.');
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -532,6 +643,9 @@ export default function BlastingPage() {
           <h2>User Management</h2>
           <div className="inline-actions">
             <span>{isPeopleLoading ? 'Memuat user...' : `${selectedReadyPeople.length} dipilih dari ${people.length} orang`}</span>
+            <button type="button" className="text-button" onClick={() => setIsImportOpen(true)}>
+              Import Excel
+            </button>
             {selectedPersonIds.length > 0 && (
               <button type="button" className="text-button danger-button" onClick={clearSelectedPeople}>
                 Uncheck Semua
@@ -824,6 +938,98 @@ export default function BlastingPage() {
           </div>
         )}
       </section>
+
+      {isImportOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="import-title">
+          <div className="import-modal">
+            <div className="section-heading-row">
+              <div>
+                <p className="agency">User Management</p>
+                <h2 id="import-title">Import Excel</h2>
+              </div>
+              <button
+                type="button"
+                className="text-button danger-button"
+                onClick={() => setIsImportOpen(false)}
+                disabled={isImporting}
+              >
+                Tutup
+              </button>
+            </div>
+
+            <div className="import-help">
+              <p>Gunakan kolom: Nama, WhatsApp, Email, Layanan.</p>
+              <p>Untuk beberapa layanan, pisahkan dengan koma di kolom Layanan.</p>
+            </div>
+
+            <label className="import-file-picker">
+              Pilih file Excel
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(event) => handleImportFile(event.target.files?.[0])}
+                disabled={isImporting}
+              />
+            </label>
+
+            {importMessage && <p className="blast-notice">{importMessage}</p>}
+            {importFileName && <p className="table-plain-text">File: {importFileName}</p>}
+
+            {importRows.length > 0 && (
+              <div className="import-preview">
+                <div className="section-heading-row">
+                  <h3>Preview</h3>
+                  <span>{importRows.length} user siap masuk tabel</span>
+                </div>
+                <div className="blast-table-wrapper">
+                  <table className="blast-table">
+                    <thead>
+                      <tr>
+                        <th>Baris</th>
+                        <th>Nama</th>
+                        <th>WhatsApp</th>
+                        <th>Email</th>
+                        <th>Layanan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.slice(0, 8).map((row) => (
+                        <tr key={`${row.rowNumber}-${row.email}`}>
+                          <td>{row.rowNumber}</td>
+                          <td>{row.name}</td>
+                          <td>{row.whatsapp || '-'}</td>
+                          <td>{row.email || '-'}</td>
+                          <td>{row.serviceTypes.join(', ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {importRows.length > 8 && <p className="table-plain-text">Menampilkan 8 data pertama.</p>}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="download-button"
+                onClick={submitImportPeople}
+                disabled={isImporting || importRows.length === 0}
+              >
+                {isImporting ? 'Mengimport...' : 'Submit Import'}
+              </button>
+              <button
+                type="button"
+                className="admin-link secondary-admin-link"
+                onClick={() => setIsImportOpen(false)}
+                disabled={isImporting}
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

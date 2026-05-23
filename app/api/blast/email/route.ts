@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
 import { serviceToSlug } from '../../../services';
 import { formatServerError, getRequiredEnv, getSupabase } from '../../../supabase-server';
@@ -25,6 +26,17 @@ const sleep = (ms: number) => new Promise((resolve) => {
 });
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const hasMailServer = async (email: string) => {
+  const domain = email.split('@')[1];
+  if (!domain) return false;
+
+  try {
+    const records = await resolveMx(domain);
+    return records.length > 0;
+  } catch {
+    return false;
+  }
+};
 
 const getAppUrl = () => {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
@@ -108,6 +120,55 @@ const sendMailWithRetry = async (
   }
 
   throw lastError;
+};
+
+const buildResultRows = (
+  records: {
+    id: string;
+    service_type: string;
+    survey_link: string;
+  }[],
+  person: EmailRecipient,
+  normalizedEmail: string,
+  message: string,
+  status: 'Sukses' | 'Gagal',
+  error: string,
+  sentAt?: string,
+) => records.map((record) => ({
+  id: record.id,
+  personName: person.name,
+  email: normalizedEmail,
+  whatsapp: person.whatsapp,
+  serviceType: record.service_type,
+  surveyLink: record.survey_link,
+  message,
+  status,
+  error,
+  sentAt,
+}));
+
+const insertFailedRecords = async (
+  supabase: ReturnType<typeof getSupabase>,
+  records: {
+    id: string;
+    blast_group_id: string;
+    channel: string;
+    person_name: string;
+    whatsapp: string;
+    email: string;
+    service_type: string;
+    survey_link: string;
+    message: string;
+  }[],
+  errorMessage: string,
+) => {
+  const { error } = await supabase.from('blast_records').insert(records.map((record) => ({
+    ...record,
+    send_status: 'Gagal',
+    error: errorMessage,
+  })));
+
+  if (error) throw error;
 };
 
 export async function POST(request: NextRequest) {
@@ -202,6 +263,13 @@ export async function POST(request: NextRequest) {
       }));
 
       try {
+        if (!await hasMailServer(normalizedEmail)) {
+          const errorMessage = 'Domain email tidak punya server penerima email/MX record.';
+          await insertFailedRecords(supabase, records, errorMessage);
+          results.push(buildResultRows(records, person, normalizedEmail, email.text, 'Gagal', errorMessage));
+          continue;
+        }
+
         const { data: duplicateRows, error: duplicateError } = await supabase
           .from('blast_records')
           .select('service_type')
@@ -215,17 +283,7 @@ export async function POST(request: NextRequest) {
         if ((duplicateRows ?? []).length > 0) {
           const duplicateServices = duplicateRows.map((row) => row.service_type).join(', ');
           const duplicateMessage = `Dilewati: email untuk layanan ini sudah dikirim/diproses dalam ${DUPLICATE_WINDOW_HOURS} jam terakhir (${duplicateServices}).`;
-          results.push(records.map((record) => ({
-            id: record.id,
-            personName: person.name,
-            email: normalizedEmail,
-            whatsapp: person.whatsapp,
-            serviceType: record.service_type,
-            surveyLink: record.survey_link,
-            message: email.text,
-            status: 'Gagal',
-            error: duplicateMessage,
-          })));
+          results.push(buildResultRows(records, person, normalizedEmail, email.text, 'Gagal', duplicateMessage));
           continue;
         }
 
@@ -237,37 +295,40 @@ export async function POST(request: NextRequest) {
 
         if (pendingInsertError) throw pendingInsertError;
 
-        await sendMailWithRetry(transporter, {
+        const sendInfo = await sendMailWithRetry(transporter, {
           from: `"GRC Survey" <${from}>`,
           to: normalizedEmail,
           subject: email.subject,
           text: email.text,
           html: email.html,
         });
+        const rejected = Array.isArray(sendInfo.rejected) ? sendInfo.rejected.map(String) : [];
+        const accepted = Array.isArray(sendInfo.accepted) ? sendInfo.accepted.map(String) : [];
+
+        if (rejected.includes(normalizedEmail) || accepted.length === 0) {
+          throw new Error(`SMTP menolak penerima: ${normalizedEmail}`);
+        }
 
         const { error: updateError } = await supabase
           .from('blast_records')
           .update({
           send_status: 'Sukses',
-          error: '',
+          error: 'Diterima server SMTP. Delivery ke inbox tetap bergantung server penerima.',
           sent_at: sentAt,
           })
           .eq('blast_group_id', blastGroupId);
 
         if (updateError) throw updateError;
 
-        results.push(records.map((record) => ({
-          id: record.id,
-          personName: person.name,
-          email: normalizedEmail,
-          whatsapp: person.whatsapp,
-          serviceType: record.service_type,
-          surveyLink: record.survey_link,
-          message: email.text,
-          status: 'Sukses',
-          error: '',
+        results.push(buildResultRows(
+          records,
+          person,
+          normalizedEmail,
+          email.text,
+          'Sukses',
+          'Diterima server SMTP. Delivery ke inbox tetap bergantung server penerima.',
           sentAt,
-        })));
+        ));
       } catch (error) {
         const errorMessage = formatServerError(error, 'Email gagal dikirim.');
         await supabase

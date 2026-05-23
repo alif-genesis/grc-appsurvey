@@ -822,6 +822,78 @@ select {
   justify-items: flex-start;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.import-modal {
+  width: min(960px, 100%);
+  max-height: min(86vh, 820px);
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.3);
+}
+
+.import-modal h2,
+.import-modal h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.import-help {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.import-help p {
+  margin: 0;
+  color: #475569;
+  font-weight: 700;
+}
+
+.import-file-picker {
+  display: grid;
+  gap: 8px;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.import-file-picker input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 10px 12px;
+}
+
+.import-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
 .history-table td {
   min-width: 140px;
 }
