@@ -93,6 +93,11 @@ export default function BlastingPage() {
   const [newPerson, setNewPerson] = useState(emptyPerson);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
   const [blastNotice, setBlastNotice] = useState('');
+  const [peopleSearch, setPeopleSearch] = useState('');
+  const [peopleServiceFilter, setPeopleServiceFilter] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyServiceFilter, setHistoryServiceFilter] = useState('');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('');
 
   useEffect(() => {
     const storedPeople = loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []);
@@ -120,6 +125,39 @@ export default function BlastingPage() {
   ), [readyPeople, selectedPersonIds]);
 
   const blastTargets = selectedReadyPeople;
+
+  const filteredPeople = useMemo(() => {
+    const query = peopleSearch.trim().toLowerCase();
+    return people.filter((person) => {
+      const services = getPersonServices(person);
+      const matchesSearch = !query || [
+        person.name,
+        person.whatsapp,
+        person.email,
+        services.join(' '),
+      ].join(' ').toLowerCase().includes(query);
+      const matchesService = !peopleServiceFilter || services.includes(peopleServiceFilter);
+      return matchesSearch && matchesService;
+    });
+  }, [people, peopleSearch, peopleServiceFilter]);
+
+  const filteredHistory = useMemo(() => {
+    const query = historySearch.trim().toLowerCase();
+    return history.filter((row) => {
+      const monitoringStatus = getMonitoringStatus(row);
+      const matchesSearch = !query || [
+        row.personName,
+        row.whatsapp,
+        row.email,
+        row.serviceType,
+        row.surveyLink,
+        monitoringStatus,
+      ].join(' ').toLowerCase().includes(query);
+      const matchesService = !historyServiceFilter || row.serviceType === historyServiceFilter;
+      const matchesStatus = !historyStatusFilter || monitoringStatus === historyStatusFilter;
+      return matchesSearch && matchesService && matchesStatus;
+    });
+  }, [history, historySearch, historyServiceFilter, historyStatusFilter]);
 
   const refreshHistory = async () => {
     try {
@@ -321,6 +359,26 @@ export default function BlastingPage() {
           <span>{selectedReadyPeople.length} dipilih dari {people.length} orang</span>
         </div>
 
+        <div className="filter-row">
+          <label>
+            Cari Orang
+            <input
+              value={peopleSearch}
+              onChange={(event) => setPeopleSearch(event.target.value)}
+              placeholder="Nama, email, WhatsApp, layanan"
+            />
+          </label>
+          <label>
+            Filter Layanan
+            <select value={peopleServiceFilter} onChange={(event) => setPeopleServiceFilter(event.target.value)}>
+              <option value="">Semua layanan</option>
+              {serviceTypes.map((service) => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         <form className="add-person-form" onSubmit={addPerson}>
           <label>
             Nama
@@ -368,6 +426,8 @@ export default function BlastingPage() {
 
         {people.length === 0 ? (
           <p>Belum ada user. Tambahkan orang terlebih dahulu untuk mulai blast.</p>
+        ) : filteredPeople.length === 0 ? (
+          <p>Tidak ada user yang cocok dengan filter.</p>
         ) : (
           <div className="blast-table-wrapper">
             <table className="blast-table">
@@ -387,7 +447,7 @@ export default function BlastingPage() {
                 </tr>
               </thead>
               <tbody>
-                {people.map((person) => (
+                {filteredPeople.map((person) => (
                   <tr key={person.id}>
                     <td>
                       <input
@@ -462,8 +522,41 @@ export default function BlastingPage() {
           </div>
         </div>
 
+        <div className="filter-row history-filter-row">
+          <label>
+            Cari Riwayat
+            <input
+              value={historySearch}
+              onChange={(event) => setHistorySearch(event.target.value)}
+              placeholder="Nama, email, WhatsApp, layanan, status"
+            />
+          </label>
+          <label>
+            Filter Layanan
+            <select value={historyServiceFilter} onChange={(event) => setHistoryServiceFilter(event.target.value)}>
+              <option value="">Semua layanan</option>
+              {serviceTypes.map((service) => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Filter Status
+            <select value={historyStatusFilter} onChange={(event) => setHistoryStatusFilter(event.target.value)}>
+              <option value="">Semua status</option>
+              <option value="Terima, belum buka email/link">Terima, belum buka email/link</option>
+              <option value="Terima, buka email, belum isi">Terima, buka email, belum isi</option>
+              <option value="Terima, buka link, belum isi">Terima, buka link, belum isi</option>
+              <option value="Terima dan sudah isi">Terima dan sudah isi</option>
+              <option value="Gagal dikirim">Gagal dikirim</option>
+            </select>
+          </label>
+        </div>
+
         {history.length === 0 ? (
           <p>Belum ada riwayat blast.</p>
+        ) : filteredHistory.length === 0 ? (
+          <p>Tidak ada riwayat yang cocok dengan filter.</p>
         ) : (
           <div className="blast-table-wrapper">
             <table className="blast-table history-table">
@@ -483,7 +576,7 @@ export default function BlastingPage() {
                 </tr>
               </thead>
               <tbody>
-                {history.map((row) => (
+                {filteredHistory.map((row) => (
                   <tr key={row.id}>
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
                     <td>{row.personName}</td>
