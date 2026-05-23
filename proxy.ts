@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_COOKIE = 'grc_admin_session';
 
-const protectedPagePaths = ['/admin', '/blasting', '/list'];
+const protectedPagePaths = ['/admin', '/blasting', '/list', '/monitoring'];
 const protectedApiPaths = [
   '/api/blast/email',
   '/api/blast/history',
@@ -47,7 +47,7 @@ const isProtectedPath = (request: NextRequest) => {
     return true;
   }
 
-  return pathname === '/api/surveys' && request.method === 'GET';
+  return (pathname === '/api/surveys' || pathname.startsWith('/api/surveys/')) && request.method === 'GET';
 };
 
 const isCrossSiteMutation = (request: NextRequest) => {

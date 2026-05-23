@@ -582,6 +582,131 @@ select {
   font-weight: 700;
 }
 
+.monitoring-table-wrapper {
+  max-height: 620px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+}
+
+.monitoring-table {
+  min-width: 2500px;
+}
+
+.monitoring-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.monitoring-table td {
+  vertical-align: top;
+}
+
+.scale-pill {
+  display: block;
+  width: max-content;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #0f4eb8;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.single-filter-row {
+  grid-template-columns: 1fr;
+}
+
+.skm-score-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.skm-score-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 16px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  background: #f8fafc;
+  border-radius: 14px;
+}
+
+.skm-score-card span,
+.skm-score-card small {
+  color: #334155;
+  font-weight: 800;
+}
+
+.skm-score-value {
+  grid-row: span 2;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: #94d34f;
+  color: #0f172a;
+}
+
+.skm-score-value strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.skm-score-value em {
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.skm-table-wrapper {
+  max-height: 680px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+}
+
+.skm-table {
+  min-width: 1500px;
+}
+
+.skm-table th {
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.skm-table td {
+  text-align: center;
+}
+
+.skm-table .calculation-row td {
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+.skm-note-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.skm-note-grid h3 {
+  margin: 0 0 10px;
+  color: #0f172a;
+}
+
+.skm-note-grid p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
 .chart-card {
   padding-bottom: 28px;
 }

@@ -1,36 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import writeXlsxFile from 'write-excel-file/browser';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { serviceTypes, withBasePath } from '../services';
-
-type SurveyRecord = {
-  id: string;
-  createdAt: string;
-  profile: {
-    name: string;
-    directorate: string;
-    serviceType: string;
-  };
-  responses: Record<string, string>;
-  comments: string;
-};
-
-const SURVEY_STORAGE_KEY = 'genesis-survey-records';
-
-const serviceTargets = serviceTypes.map((name) => ({ name, target: 10 }));
-
-const loadSurveyRecords = (): SurveyRecord[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = window.localStorage.getItem(SURVEY_STORAGE_KEY);
-    return stored ? JSON.parse(stored) as SurveyRecord[] : [];
-  } catch {
-    return [];
-  }
-};
+import { withBasePath } from '../services';
+import {
+  downloadAdminSummaryExcel,
+  downloadAdminSummaryPDF,
+  getSurveySummary,
+  loadSurveyRecords,
+  SurveyRecord,
+} from './report-utils';
 
 export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
@@ -39,7 +17,7 @@ export default function AdminPage() {
   useEffect(() => {
     const loadRecords = async () => {
       try {
-        const response = await fetch(withBasePath('/api/surveys'), { cache: 'no-store' });
+        const response = await fetch(withBasePath('/api/surveys/'), { cache: 'no-store' });
         const payload = await response.json() as { records?: SurveyRecord[]; error?: string };
 
         if (!response.ok) {
@@ -57,113 +35,7 @@ export default function AdminPage() {
     loadRecords();
   }, []);
 
-  const summary = useMemo(() => {
-    const actualCounts = records.reduce<Record<string, number>>((acc, record) => {
-      const key = record.profile.serviceType;
-      if (!key) return acc;
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    const serviceSummary = serviceTargets.map((service) => {
-      const responded = actualCounts[service.name] ?? 0;
-      const gap = service.target - responded;
-      const percent = service.target > 0 ? Math.round((responded / service.target) * 100) : 0;
-      return {
-        ...service,
-        responded,
-        gap,
-        percent,
-      };
-    });
-
-    const overallTarget = serviceSummary.reduce((sum, row) => sum + row.target, 0);
-    const overallResponded = serviceSummary.reduce((sum, row) => sum + row.responded, 0);
-    const overallPercent = overallTarget > 0 ? Math.round((overallResponded / overallTarget) * 100) : 0;
-
-    return {
-      totalSurveys: records.length,
-      uniqueRespondents: new Set(records.map((record) => `${record.profile.name}-${record.profile.directorate}-${record.profile.serviceType}`)).size,
-      serviceSummary,
-      overallTarget,
-      overallResponded,
-      overallPercent,
-    };
-  }, [records]);
-
-  const downloadReport = async () => {
-    if (records.length === 0) return;
-
-    const rows = records.map((record) => {
-      const responseFields = Object.entries(record.responses).reduce<Record<string, string>>((acc, [questionKey, answer]) => {
-        if (questionKey.startsWith('service-')) {
-          acc[`Kepuasan ${questionKey.replace('service-', '')}`] = answer;
-        } else {
-          acc[`Anti Korupsi ${questionKey.replace('anti-', '')}`] = answer;
-        }
-        return acc;
-      }, {});
-
-      return {
-        Tanggal: new Date(record.createdAt).toLocaleString('id-ID'),
-        Nama: record.profile.name,
-        Direktorat: record.profile.directorate,
-        'Jenis Layanan': record.profile.serviceType,
-        Komentar: record.comments,
-        ...responseFields,
-      };
-    });
-
-    const headers = Object.keys(rows[0] ?? {});
-    const columns = headers.map((header) => ({
-      header,
-      width: Math.min(Math.max(header.length + 8, 18), 42),
-      cell: (row: Record<string, unknown>) => ({ value: String(row[header] ?? '') }),
-    }));
-
-    await writeXlsxFile(rows, { columns }).toFile(`report-survei-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
-
-  const downloadPDFReport = () => {
-    if (records.length === 0) return;
-
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const title = 'AUDIT REPORT';
-    const docDate = new Date().toLocaleDateString('id-ID');
-
-    doc.setFontSize(18);
-    doc.text(title, 40, 50);
-    doc.setFontSize(10);
-    doc.text(`Tanggal: ${docDate}`, 40, 70);
-    doc.text(`Company: PT GENETIKA SOLUSI BISNIS`, 40, 85);
-    doc.text(`Type: Survei Layanan`, 40, 100);
-    doc.text(`Mode: GAPS`, 40, 115);
-    doc.text(`Status: COMPLETED`, 40, 130);
-
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(1);
-    doc.line(40, 145, 555, 145);
-
-    const body = summary.serviceSummary.map((row, index) => [
-      index + 1,
-      row.name,
-      row.target,
-      row.responded,
-      row.gap,
-      `${row.percent}%`,
-    ]);
-
-    autoTable(doc, {
-      startY: 160,
-      head: [['No', 'Nama Layanan', 'Target', 'Respon', 'GAP', 'Persentase']],
-      body,
-      styles: { fontSize: 9, cellPadding: 4 },
-      headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
-      margin: { left: 40, right: 40 },
-    });
-
-    doc.save(`report-survei-${new Date().toISOString().slice(0, 10)}.pdf`);
-  };
+  const summary = useMemo(() => getSurveySummary(records), [records]);
 
   return (
     <main className="page-shell admin-shell">
@@ -177,15 +49,38 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="admin-link-row">
-        <div className="admin-actions">
-          <a className="admin-link" href={withBasePath('/list')}>Kembali ke Pilih Layanan</a>
-          <a className="admin-link" href={withBasePath('/blasting')}>Blasting</a>
-          <a className="admin-link secondary-admin-link" href={withBasePath('/api/logout')}>Logout</a>
-          <button type="button" className="download-button" onClick={downloadReport}>Download Excel</button>
-          <button type="button" className="download-button" onClick={downloadPDFReport}>Download PDF</button>
-        </div>
-      </div>
+<div className="admin-link-row">
+  <div
+    className="admin-actions"
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      width: '100%',
+    }}
+  >
+
+    <a className="admin-link" href={withBasePath('/blasting')}>
+      Blasting
+    </a>
+
+    <a className="admin-link" href={withBasePath('/monitoring')}>
+      Monitoring
+    </a>
+
+    <a className="admin-link" href={withBasePath('/list')}>
+      List Layanan
+    </a>
+
+    <a
+      className="admin-link secondary-admin-link"
+      href={withBasePath('/api/logout')}
+      style={{ marginLeft: 'auto' }}
+    >
+      Logout
+    </a>
+  </div>
+</div>
       {loadMessage && <p className="admin-data-message">{loadMessage}</p>}
 
       <section className="dashboard-grid">
@@ -246,7 +141,25 @@ export default function AdminPage() {
       </section>
 
       <section className="table-card">
-        <h2>Summary Survey Pengisian Layanan Sekretariat</h2>
+        <div className="section-heading-row">
+          <h2>Summary Survey Pengisian Layanan Sekretariat</h2>
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="download-button"
+              onClick={() => downloadAdminSummaryExcel(records)}
+            >
+              Download Excel
+            </button>
+            <button
+              type="button"
+              className="download-button"
+              onClick={() => downloadAdminSummaryPDF(records)}
+            >
+              Download PDF
+            </button>
+          </div>
+        </div>
         <div className="service-summary-table-wrapper">
           <table className="service-summary-table">
             <thead>
@@ -273,26 +186,6 @@ export default function AdminPage() {
         </div>
       </section>
 
-      <section className="table-card">
-        <h2>Respon Terakhir</h2>
-        {records.length === 0 ? (
-          <p>Tidak ada data survei tersimpan. Isi survei di halaman utama terlebih dahulu.</p>
-        ) : (
-          <div className="record-list">
-            {records.slice(0, 5).map((record) => (
-              <div key={record.id} className="record-item">
-                <div className="record-header">
-                  <strong>{record.profile.name || 'Tanpa Nama'}</strong>
-                  <span>{new Date(record.createdAt).toLocaleString('id-ID')}</span>
-                </div>
-                <p><strong>Layanan:</strong> {record.profile.serviceType || 'Belum dipilih'}</p>
-                <p><strong>Direktorat:</strong> {record.profile.directorate || 'Belum dipilih'}</p>
-                <p><strong>Catatan:</strong> {record.comments || '-'}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </main>
   );
 }

@@ -35,7 +35,16 @@ const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
   blastId: row.blast_id ?? undefined,
   blastGroupId: row.blast_group_id ?? undefined,
 });
-const allowedAnswers = new Set(['Sangat Tidak Puas', 'Tidak Puas', 'Puas', 'Sangat Puas']);
+const allowedAnswers = new Set([
+  'Sangat Tidak Puas',
+  'Tidak Puas',
+  'Puas',
+  'Sangat Puas',
+  'Sangat Tidak Setuju',
+  'Tidak Setuju',
+  'Setuju',
+  'Sangat Setuju',
+]);
 
 export async function GET() {
   try {

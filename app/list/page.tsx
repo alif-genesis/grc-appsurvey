@@ -14,14 +14,13 @@ export default function ServiceListPage() {
           />
           <div className="admin-brand-text">
             <p className="agency">Survei Kepuasan Layanan</p>
-            <h1>Pilih Layanan yang Anda Terima</h1>
+            <h1>Layanan yang tersedia</h1>
           </div>
         </div>
       </div>
 
       <div className="admin-link-row">
         <div className="admin-actions">
-          <a className="admin-link" href={withBasePath('/')}>Kembali</a>
           <a className="admin-link secondary-admin-link" href={withBasePath('/admin')}>Admin Dashboard</a>
         </div>
       </div>
