@@ -62,7 +62,7 @@ const readErrorResponse = async (response: Response) => {
   }
 };
 
-const serviceQuestions = [
+export const serviceQuestions = [
   'Bagaimana penilaian Anda tentang kesesuaian persyaratan pelayanan yang diberikan?',
   'Bagaimana penilaian Anda tentang kemudahan mekanisme dan prosedur pada saat pelayanan diberikan?',
   'Bagaimana penilaian Anda tentang kesesuaian jangka waktu penyelesaian pelayanan?',
@@ -74,7 +74,7 @@ const serviceQuestions = [
   'Bagaimana penilaian Anda terhadap kualitas sarana dan prasarana pelayanan di unit? (Jika layanan daring, bagaimana penilaian Anda tentang kemudahan penggunaan aplikasinya?)',
 ];
 
-const antiCorruptionQuestions = [
+export const antiCorruptionQuestions = [
   'Tidak ada diskriminasi pelayanan pada unit layanan ini',
   'Tidak ada pelayanan diluar prosedur/kecurangan pelayanan pada unit layanan ini',
   'Tidak ada penerimaan imbalan uang/barang/fasilitas diluar ketentuan yang berlaku pada unit layanan ini',
@@ -82,10 +82,10 @@ const antiCorruptionQuestions = [
   'Tidak ada percaloan/perantara tidak resmi pada unit layanan ini',
 ];
 
-const serviceOptions = ['Sangat Tidak Puas', 'Tidak Puas', 'Puas', 'Sangat Puas'];
-const antiCorruptionOptions = ['Sangat Tidak Setuju', 'Tidak Setuju', 'Setuju', 'Sangat Setuju'];
+export const serviceOptions = ['Sangat Tidak Puas', 'Tidak Puas', 'Puas', 'Sangat Puas'];
+export const antiCorruptionOptions = ['Sangat Tidak Setuju', 'Tidak Setuju', 'Setuju', 'Sangat Setuju'];
 
-const directorates = [
+export const directorates = [
   'Pengembangan Ekosistem Digital',
   'Kecerdasan Artifisial dan Teknologi Baru',
   'Pos dan Penyiaran',

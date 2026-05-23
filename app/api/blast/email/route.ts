@@ -7,7 +7,8 @@ type EmailRecipient = {
   name: string;
   email: string;
   whatsapp: string;
-  serviceType: string;
+  serviceType?: string;
+  serviceTypes?: string[];
 };
 
 const getAppUrl = () => {
@@ -21,15 +22,27 @@ const getSurveyLink = (serviceType: string) => {
   return `${baseUrl}/${serviceToSlug(serviceType)}`;
 };
 
-const getTrackingUrl = (path: string, blastId: string) => {
+const getMultiSurveyLink = () => {
   const baseUrl = getAppUrl().replace(/\/+$/g, '');
-  return `${baseUrl}${path}?blastId=${encodeURIComponent(blastId)}`;
+  return `${baseUrl}/multi-survey`;
 };
 
-const buildEmail = (person: EmailRecipient, blastId: string) => {
-  const surveyLink = getSurveyLink(person.serviceType);
-  const clickLink = getTrackingUrl('/api/track/click', blastId);
-  const openPixel = getTrackingUrl('/api/track/open', blastId);
+const getTrackingUrl = (path: string, blastGroupId: string) => {
+  const baseUrl = getAppUrl().replace(/\/+$/g, '');
+  return `${baseUrl}${path}?blastGroupId=${encodeURIComponent(blastGroupId)}`;
+};
+
+const getRecipientServices = (person: EmailRecipient) => (
+  person.serviceTypes?.filter(Boolean) ?? (person.serviceType ? [person.serviceType] : [])
+);
+
+const buildEmail = (person: EmailRecipient, blastGroupId: string) => {
+  const services = getRecipientServices(person);
+  const surveyLink = services.length > 1 ? getMultiSurveyLink() : getSurveyLink(services[0]);
+  const clickLink = getTrackingUrl('/api/track/click', blastGroupId);
+  const openPixel = getTrackingUrl('/api/track/open', blastGroupId);
+  const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
+  const serviceListHtml = services.map((service) => `<li>${service}</li>`).join('');
   const subject = 'Permohonan Pengisian Survei Kepuasan Layanan';
   const text = [
     `Yth. ${person.name},`,
@@ -37,7 +50,7 @@ const buildEmail = (person: EmailRecipient, blastId: string) => {
     'Dengan hormat,',
     '',
     'Mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:',
-    person.serviceType,
+    serviceListText,
     '',
     `Tautan survei: ${surveyLink}`,
     '',
@@ -49,7 +62,7 @@ const buildEmail = (person: EmailRecipient, blastId: string) => {
     <p>Yth. ${person.name},</p>
     <p>Dengan hormat,</p>
     <p>Mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:</p>
-    <p><strong>${person.serviceType}</strong></p>
+    <ol>${serviceListHtml}</ol>
     <p>Tautan survei:</p>
     <p><a href="${clickLink}">${surveyLink}</a></p>
     <p>Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.</p>
@@ -64,7 +77,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { recipients?: EmailRecipient[] };
     const recipients = (body.recipients ?? []).filter((person) => (
-      person.name?.trim() && person.email?.trim() && person.serviceType?.trim()
+      person.name?.trim() && person.email?.trim() && getRecipientServices(person).length > 0
     ));
 
     if (recipients.length === 0) {
@@ -82,18 +95,21 @@ export async function POST(request: NextRequest) {
     });
 
     const results = await Promise.all(recipients.map(async (person) => {
-      const blastId = crypto.randomUUID();
-      const email = buildEmail(person, blastId);
-      const baseRecord = {
-        id: blastId,
+      const blastGroupId = crypto.randomUUID();
+      const services = getRecipientServices(person);
+      const email = buildEmail(person, blastGroupId);
+      const sentAt = new Date().toISOString();
+      const records = services.map((serviceType) => ({
+        id: crypto.randomUUID(),
+        blast_group_id: blastGroupId,
         channel: 'Email',
         person_name: person.name,
         whatsapp: person.whatsapp || '',
         email: person.email,
-        service_type: person.serviceType,
-        survey_link: email.surveyLink,
+        service_type: serviceType,
+        survey_link: getSurveyLink(serviceType),
         message: email.text,
-      };
+      }));
 
       try {
         await transporter.sendMail({
@@ -104,48 +120,50 @@ export async function POST(request: NextRequest) {
           html: email.html,
         });
 
-        const { error: insertError } = await supabase.from('blast_records').insert({
-          ...baseRecord,
+        const { error: insertError } = await supabase.from('blast_records').insert(records.map((record) => ({
+          ...record,
           send_status: 'Sukses',
           error: '',
-          sent_at: new Date().toISOString(),
-        });
+          sent_at: sentAt,
+        })));
 
         if (insertError) throw insertError;
 
-        return {
-          id: blastId,
+        return records.map((record) => ({
+          id: record.id,
           personName: person.name,
           email: person.email,
           whatsapp: person.whatsapp,
-          serviceType: person.serviceType,
-          surveyLink: email.surveyLink,
+          serviceType: record.service_type,
+          surveyLink: record.survey_link,
           message: email.text,
           status: 'Sukses',
           error: '',
-        };
+          sentAt,
+        }));
       } catch (error) {
-        await supabase.from('blast_records').insert({
-          ...baseRecord,
+        const errorMessage = formatServerError(error, 'Email gagal dikirim.');
+        await supabase.from('blast_records').insert(records.map((record) => ({
+          ...record,
           send_status: 'Gagal',
-          error: formatServerError(error, 'Email gagal dikirim.'),
-        });
+          error: errorMessage,
+        })));
 
-        return {
-          id: blastId,
+        return records.map((record) => ({
+          id: record.id,
           personName: person.name,
           email: person.email,
           whatsapp: person.whatsapp,
-          serviceType: person.serviceType,
-          surveyLink: email.surveyLink,
+          serviceType: record.service_type,
+          surveyLink: record.survey_link,
           message: email.text,
           status: 'Gagal',
-          error: formatServerError(error, 'Email gagal dikirim.'),
-        };
+          error: errorMessage,
+        }));
       }
     }));
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ results: results.flat() });
   } catch (error) {
     return NextResponse.json(
       { error: formatServerError(error, 'Email blast gagal diproses.') },

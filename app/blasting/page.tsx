@@ -8,7 +8,8 @@ type BlastPerson = {
   name: string;
   whatsapp: string;
   email: string;
-  serviceType: string;
+  serviceType?: string;
+  serviceTypes: string[];
 };
 
 type BlastHistory = {
@@ -38,7 +39,7 @@ const emptyPerson = {
   name: '',
   whatsapp: '',
   email: '',
-  serviceType: serviceTypes[0] ?? '',
+  serviceTypes: serviceTypes[0] ? [serviceTypes[0]] : [],
 };
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -59,11 +60,17 @@ const saveToStorage = <T,>(key: string, value: T) => {
 };
 
 const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
+const getMultiSurveyLink = () => withBasePath('/multi-survey');
+
+const getPersonServices = (person: Pick<BlastPerson, 'serviceType' | 'serviceTypes'>) => (
+  person.serviceTypes?.length ? person.serviceTypes : person.serviceType ? [person.serviceType] : []
+);
 
 const buildMessage = (person: BlastPerson, channel: BlastHistory['channel']) => {
-  const link = getSurveyLink(person.serviceType);
+  const services = getPersonServices(person);
+  const link = services.length > 1 ? getMultiSurveyLink() : getSurveyLink(services[0]);
   const target = channel === 'WhatsApp' ? person.whatsapp : person.email;
-  return `Halo ${person.name}, mohon isi survei ${person.serviceType} melalui link ${link}. Dikirim ke ${target}.`;
+  return `Halo ${person.name}, mohon isi survei ${services.join(', ')} melalui link ${link}. Dikirim ke ${target}.`;
 };
 
 const formatDateTime = (value?: string | null) => (
@@ -101,7 +108,7 @@ export default function BlastingPage() {
   }, [history]);
 
   const readyPeople = useMemo(
-    () => people.filter((person) => person.name.trim() && person.serviceType.trim()),
+    () => people.filter((person) => person.name.trim() && getPersonServices(person).length > 0),
     [people],
   );
 
@@ -125,17 +132,39 @@ export default function BlastingPage() {
       name: newPerson.name.trim(),
       whatsapp: newPerson.whatsapp.trim(),
       email: newPerson.email.trim(),
-      serviceType: newPerson.serviceType,
+      serviceTypes: newPerson.serviceTypes,
     };
 
     setPeople((current) => [person, ...current]);
     setNewPerson(emptyPerson);
   };
 
-  const updatePerson = (id: string, field: keyof Omit<BlastPerson, 'id'>, value: string) => {
+  const updatePerson = (id: string, field: keyof Omit<BlastPerson, 'id' | 'serviceTypes'>, value: string) => {
     setPeople((current) => current.map((person) => (
       person.id === id ? { ...person, [field]: value } : person
     )));
+  };
+
+  const toggleNewPersonService = (service: string) => {
+    setNewPerson((current) => {
+      const exists = current.serviceTypes.includes(service);
+      const serviceList = exists
+        ? current.serviceTypes.filter((item) => item !== service)
+        : [...current.serviceTypes, service];
+      return { ...current, serviceTypes: serviceList };
+    });
+  };
+
+  const togglePersonService = (id: string, service: string) => {
+    setPeople((current) => current.map((person) => {
+      if (person.id !== id) return person;
+      const currentServices = getPersonServices(person);
+      const exists = currentServices.includes(service);
+      const serviceList = exists
+        ? currentServices.filter((item) => item !== service)
+        : [...currentServices, service];
+      return { ...person, serviceTypes: serviceList };
+    }));
   };
 
   const deletePerson = (id: string) => {
@@ -146,19 +175,19 @@ export default function BlastingPage() {
     const now = new Date().toISOString();
     const rows = readyPeople
       .filter((person) => person.whatsapp.trim())
-      .map((person) => ({
-        id: createId(),
-        channel: 'WhatsApp' as const,
-        personName: person.name,
-        whatsapp: person.whatsapp,
-        email: person.email,
-        serviceType: person.serviceType,
-        surveyLink: getSurveyLink(person.serviceType),
-        message: buildMessage(person, 'WhatsApp'),
-        status: 'Sukses' as const,
-        createdAt: now,
-        sentAt: now,
-      }));
+      .flatMap((person) => getPersonServices(person).map((serviceType) => ({
+          id: createId(),
+          channel: 'WhatsApp' as const,
+          personName: person.name,
+          whatsapp: person.whatsapp,
+          email: person.email,
+          serviceType,
+          surveyLink: getSurveyLink(serviceType),
+          message: buildMessage(person, 'WhatsApp'),
+          status: 'Sukses' as const,
+          createdAt: now,
+          sentAt: now,
+        })));
 
     setHistory((current) => [...rows, ...current]);
     setBlastNotice(`${rows.length} blast WhatsApp dummy ditambahkan ke riwayat.`);
@@ -297,17 +326,20 @@ export default function BlastingPage() {
           </label>
           <label>
             Layanan
-            <select
-              value={newPerson.serviceType}
-              onChange={(event) => setNewPerson((current) => ({ ...current, serviceType: event.target.value }))}
-              required
-            >
+            <div className="service-checkbox-list">
               {serviceTypes.map((service) => (
-                <option key={service} value={service}>{service}</option>
+                <label key={service} className="service-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={newPerson.serviceTypes.includes(service)}
+                    onChange={() => toggleNewPersonService(service)}
+                  />
+                  <span>{service}</span>
+                </label>
               ))}
-            </select>
+            </div>
           </label>
-          <button type="submit" className="download-button">Add People</button>
+          <button type="submit" className="download-button" disabled={newPerson.serviceTypes.length === 0}>Add People</button>
         </form>
 
         {people.length === 0 ? (
@@ -348,17 +380,27 @@ export default function BlastingPage() {
                       />
                     </td>
                     <td>
-                      <select
-                        value={person.serviceType}
-                        onChange={(event) => updatePerson(person.id, 'serviceType', event.target.value)}
-                      >
+                      <div className="service-checkbox-list compact-service-list">
                         {serviceTypes.map((service) => (
-                          <option key={service} value={service}>{service}</option>
+                          <label key={service} className="service-checkbox-item">
+                            <input
+                              type="checkbox"
+                              checked={getPersonServices(person).includes(service)}
+                              onChange={() => togglePersonService(person.id, service)}
+                            />
+                            <span>{service}</span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
                     </td>
                     <td>
-                      <a href={getSurveyLink(person.serviceType)}>{getSurveyLink(person.serviceType)}</a>
+                      {getPersonServices(person).length === 0 ? (
+                        <span>Belum ada layanan</span>
+                      ) : getPersonServices(person).length > 1 ? (
+                        <span>{getPersonServices(person).length} layanan dalam 1 link email</span>
+                      ) : (
+                        <a href={getSurveyLink(getPersonServices(person)[0])}>{getSurveyLink(getPersonServices(person)[0])}</a>
+                      )}
                     </td>
                     <td>
                       <button type="button" className="text-button danger-button" onClick={() => deletePerson(person.id)}>

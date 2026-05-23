@@ -22,8 +22,12 @@ create policy "service role can manage survey records"
 alter table public.survey_records
   add column if not exists blast_id text;
 
+alter table public.survey_records
+  add column if not exists blast_group_id text;
+
 create table if not exists public.blast_records (
   id text primary key,
+  blast_group_id text,
   created_at timestamptz not null default now(),
   channel text not null,
   person_name text not null,
@@ -45,6 +49,12 @@ create index if not exists blast_records_created_at_idx
 
 create index if not exists blast_records_email_service_idx
   on public.blast_records (email, service_type);
+
+alter table public.blast_records
+  add column if not exists blast_group_id text;
+
+create index if not exists blast_records_group_idx
+  on public.blast_records (blast_group_id);
 
 alter table public.blast_records enable row level security;
 

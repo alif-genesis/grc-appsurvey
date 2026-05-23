@@ -3,6 +3,7 @@ import { formatServerError, getSupabase } from '../../../supabase-server';
 
 type BlastRow = {
   id: string;
+  blast_group_id: string | null;
   created_at: string;
   channel: 'Email' | 'WhatsApp';
   person_name: string;
@@ -21,6 +22,7 @@ type BlastRow = {
 
 const mapBlastRow = (row: BlastRow) => ({
   id: row.id,
+  blastGroupId: row.blast_group_id,
   channel: row.channel,
   personName: row.person_name,
   whatsapp: row.whatsapp,
@@ -42,7 +44,7 @@ export async function GET() {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('blast_records')
-      .select('id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at')
+      .select('id, blast_group_id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

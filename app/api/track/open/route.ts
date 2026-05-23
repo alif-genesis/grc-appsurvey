@@ -8,14 +8,20 @@ const pixel = Buffer.from(
 
 export async function GET(request: NextRequest) {
   const blastId = request.nextUrl.searchParams.get('blastId');
+  const blastGroupId = request.nextUrl.searchParams.get('blastGroupId');
 
-  if (blastId) {
+  if (blastId || blastGroupId) {
     const supabase = getSupabase();
-    await supabase
+    const update = supabase
       .from('blast_records')
       .update({ opened_at: new Date().toISOString() })
-      .eq('id', blastId)
       .is('opened_at', null);
+
+    if (blastGroupId) {
+      await update.eq('blast_group_id', blastGroupId);
+    } else {
+      await update.eq('id', blastId);
+    }
   }
 
   return new NextResponse(pixel, {

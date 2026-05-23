@@ -12,6 +12,7 @@ type SurveyRecord = {
   responses: Record<string, string>;
   comments: string;
   blastId?: string;
+  blastGroupId?: string;
 };
 
 type SurveyRow = {
@@ -21,6 +22,7 @@ type SurveyRow = {
   responses: SurveyRecord['responses'];
   comments: string | null;
   blast_id: string | null;
+  blast_group_id: string | null;
 };
 
 const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
@@ -30,6 +32,7 @@ const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
   responses: row.responses,
   comments: row.comments ?? '',
   blastId: row.blast_id ?? undefined,
+  blastGroupId: row.blast_group_id ?? undefined,
 });
 
 export async function GET() {
@@ -37,7 +40,7 @@ export async function GET() {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('survey_records')
-      .select('id, created_at, profile, responses, comments, blast_id')
+      .select('id, created_at, profile, responses, comments, blast_id, blast_group_id')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -70,6 +73,7 @@ export async function POST(request: NextRequest) {
       responses: survey.responses,
       comments: survey.comments,
       blast_id: survey.blastId || null,
+      blast_group_id: survey.blastGroupId || null,
     });
 
     if (error) throw error;
