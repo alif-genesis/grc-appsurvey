@@ -177,6 +177,7 @@ export default function AdminPage() {
         <div className="admin-actions">
           <a className="admin-link" href={withBasePath('/')}>Kembali ke Pilih Layanan</a>
           <a className="admin-link" href={withBasePath('/blasting')}>Blasting</a>
+          <a className="admin-link secondary-admin-link" href={withBasePath('/api/logout')}>Logout</a>
           <button type="button" className="download-button" onClick={downloadReport}>Download Excel</button>
           <button type="button" className="download-button" onClick={downloadPDFReport}>Download PDF</button>
         </div>

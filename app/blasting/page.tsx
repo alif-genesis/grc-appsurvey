@@ -471,6 +471,7 @@ export default function BlastingPage() {
         <div className="admin-actions">
           <a className="admin-link" href={withBasePath('/admin')}>Kembali ke Admin</a>
           <a className="admin-link" href={withBasePath('/')}>Pilih Layanan</a>
+          <a className="admin-link secondary-admin-link" href={withBasePath('/api/logout')}>Logout</a>
         </div>
       </div>
 
