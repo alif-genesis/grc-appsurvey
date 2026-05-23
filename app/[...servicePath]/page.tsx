@@ -1,7 +1,7 @@
 import { serviceToSlug, serviceTypes } from '../services';
 import SurveyForm from '../survey-form';
 
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 export function generateStaticParams() {
   return serviceTypes.map((service) => ({

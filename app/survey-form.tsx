@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { getServiceFromPath, KOMDIGI_LOGO_URL, withBasePath } from './services';
+import { findServiceFromPath, getServiceFromPath, KOMDIGI_LOGO_URL, serviceTypes, withBasePath } from './services';
 
 type SurveyRecord = {
   id: string;
@@ -149,14 +149,14 @@ export default function HomePage() {
   const draftKeyRef = useRef('');
 
   useEffect(() => {
-    const serviceType = getServiceFromPath(window.location.pathname);
+    const fallbackServiceType = getServiceFromPath(window.location.pathname);
     const draftKey = getDraftKey();
     const draft = loadSurveyDraft(draftKey);
     draftKeyRef.current = draftKey;
     setProfile((current) => ({
       ...current,
       ...(draft?.profile ?? {}),
-      serviceType,
+      serviceType: fallbackServiceType,
     }));
     if (draft) {
       setResponses(draft.responses ?? {});
@@ -180,7 +180,20 @@ export default function HomePage() {
       }
     };
 
+    const resolveService = async () => {
+      try {
+        const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+        const payload = await response.json() as { services?: Array<{ name: string }> };
+        const availableServices = payload.services?.map((service) => service.name).filter(Boolean) ?? serviceTypes;
+        const serviceType = findServiceFromPath(window.location.pathname, availableServices) || fallbackServiceType;
+        setProfile((current) => ({ ...current, serviceType }));
+      } catch {
+        setProfile((current) => ({ ...current, serviceType: fallbackServiceType }));
+      }
+    };
+
     checkSubmission();
+    resolveService();
   }, []);
 
   useEffect(() => {

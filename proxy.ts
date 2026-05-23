@@ -47,6 +47,10 @@ const isProtectedPath = (request: NextRequest) => {
     return true;
   }
 
+  if ((pathname === '/api/services' || pathname.startsWith('/api/services/')) && request.method !== 'GET') {
+    return true;
+  }
+
   return (pathname === '/api/surveys' || pathname.startsWith('/api/surveys/')) && request.method === 'GET';
 };
 

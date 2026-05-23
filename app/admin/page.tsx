@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { withBasePath } from '../services';
+import { serviceTypes, withBasePath } from '../services';
 import {
   downloadAdminSummaryExcel,
   downloadAdminSummaryPDF,
@@ -9,13 +9,19 @@ import {
   loadSurveyRecords,
   SurveyRecord,
 } from './report-utils';
+import { AdminFooter, AdminHeader } from './admin-chrome';
 
 export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
-  const [loadMessage, setLoadMessage] = useState('Memuat data survey...');
+  const [availableServices, setAvailableServices] = useState(serviceTypes);
+  const [loadMessage, setLoadMessage] = useState('Sinkronisasi data survey...');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadRecords = async () => {
+      const localRecords = loadSurveyRecords();
+      if (localRecords.length > 0) setRecords(localRecords);
+
       try {
         const response = await fetch(withBasePath('/api/surveys/'), { cache: 'no-store' });
         const payload = await response.json() as { records?: SurveyRecord[]; error?: string };
@@ -27,72 +33,56 @@ export default function AdminPage() {
         setRecords(payload.records ?? []);
         setLoadMessage('Data diambil dari Supabase.');
       } catch (error) {
-        setRecords(loadSurveyRecords());
+        setRecords(localRecords);
         setLoadMessage(error instanceof Error ? error.message : 'Menampilkan data lokal browser.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadRecords();
+
+    const loadServices = async () => {
+      try {
+        const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+        const payload = await response.json() as { services?: Array<{ name: string }> };
+        const names = payload.services?.map((service) => service.name).filter(Boolean);
+        if (names?.length) setAvailableServices(names);
+      } catch {
+        setAvailableServices(serviceTypes);
+      }
+    };
+
+    loadServices();
   }, []);
 
-  const summary = useMemo(() => getSurveySummary(records), [records]);
+  const summary = useMemo(() => getSurveySummary(records, availableServices), [availableServices, records]);
 
   return (
     <main className="page-shell admin-shell">
-      <div className="survey-header admin-header">
-        <div className="brand-block">
-          <img className="brand-image" src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png" alt="Genesis" />
-          <div className="admin-brand-text">
-            <p className="agency">Admin Dashboard</p>
-            <h1>Data Survei</h1>
-          </div>
-        </div>
-      </div>
-
-<div className="admin-link-row">
-  <div
-    className="admin-actions"
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      width: '100%',
-    }}
-  >
-
-    <a className="admin-link" href={withBasePath('/blasting')}>
-      Blasting
-    </a>
-
-    <a className="admin-link" href={withBasePath('/monitoring')}>
-      Monitoring
-    </a>
-
-    <a className="admin-link" href={withBasePath('/list')}>
-      List Layanan
-    </a>
-
-    <a
-      className="admin-link secondary-admin-link"
-      href={withBasePath('/api/logout')}
-      style={{ marginLeft: 'auto' }}
-    >
-      Logout
-    </a>
-  </div>
-</div>
-      {loadMessage && <p className="admin-data-message">{loadMessage}</p>}
+      <AdminHeader
+        eyebrow="Admin Dashboard"
+        title="Data Survei"
+        currentPath="/admin"
+        actions={[
+          { href: '/admin', label: 'Dashboard' },
+          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/blasting', label: 'Blasting' },
+          { href: '/list', label: 'List Layanan' },
+        ]}
+      />
+      {loadMessage && <p className={`admin-data-message ${isLoading ? 'is-loading' : ''}`}>{loadMessage}</p>}
 
       <section className="dashboard-grid">
-        <div className="summary-card">
+        <div className={`summary-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Total Survei</h2>
           <p>{summary.totalSurveys}</p>
         </div>
-        <div className="summary-card">
+        <div className={`summary-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Responden Unik</h2>
           <p>{summary.uniqueRespondents}</p>
         </div>
-        <div className="summary-card wide-card">
+        <div className={`summary-card wide-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Progress Keseluruhan</h2>
           <div className="gauge-card">
             <div className="gauge-ring" style={{ '--pct': summary.overallPercent } as any}>
@@ -147,14 +137,14 @@ export default function AdminPage() {
             <button
               type="button"
               className="download-button"
-              onClick={() => downloadAdminSummaryExcel(records)}
+              onClick={() => downloadAdminSummaryExcel(records, availableServices)}
             >
               Download Excel
             </button>
             <button
               type="button"
               className="download-button"
-              onClick={() => downloadAdminSummaryPDF(records)}
+              onClick={() => downloadAdminSummaryPDF(records, availableServices)}
             >
               Download PDF
             </button>
@@ -186,6 +176,7 @@ export default function AdminPage() {
         </div>
       </section>
 
+      <AdminFooter />
     </main>
   );
 }

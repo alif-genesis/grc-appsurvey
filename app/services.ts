@@ -1,4 +1,4 @@
-export const serviceTypes = [
+export const defaultServiceTypes = [
   'Layanan Pengajuan Pembayaran Permintaan LS Belanja Non Pegawai dan LS Pihak Ketiga',
   'Layanan Pengajuan Revisi POK Anggaran',
   'Layanan Pengajuan Revisi Anggaran Melalui Kementerian Keuangan',
@@ -21,6 +21,8 @@ export const serviceTypes = [
   'Layanan Pengajuan Izin Perceraian',
   'Layanan Penanganan Insiden Website DJED',
 ];
+
+export const serviceTypes = defaultServiceTypes;
 
 export const GENESIS_LOGO_URL = 'https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png';
 export const KOMDIGI_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/f/fc/Logo_Kementerian_Komunikasi_dan_Digital_Republik_Indonesia_%282024_full_version%29.svg';
@@ -53,4 +55,12 @@ export const getServiceFromPath = (pathname: string) => {
 
   const normalizedPath = serviceToSlug(normalizePathValue(decodedPath));
   return serviceTypes.find((service) => serviceToSlug(service) === normalizedPath) || '';
+};
+
+export const findServiceFromPath = (pathname: string, services: string[]) => {
+  const decodedPath = decodeURIComponent(pathname).replace(/^\/+|\/+$/g, '');
+  if (!decodedPath) return '';
+
+  const normalizedPath = serviceToSlug(normalizePathValue(decodedPath));
+  return services.find((service) => serviceToSlug(service) === normalizedPath) || '';
 };

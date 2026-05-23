@@ -53,12 +53,14 @@ export async function GET() {
       supabase.from('survey_records').select('id').limit(1),
       supabase.from('blast_records').select('id').limit(1),
       supabase.from('blast_people').select('id').limit(1),
+      supabase.from('service_catalog').select('id').limit(1),
     ]);
     const surveyError = checks[0].error;
     const blastError = checks[1].error;
     const peopleError = checks[2].error;
+    const serviceError = checks[3].error;
 
-    if (surveyError || blastError || peopleError) {
+    if (surveyError || blastError || peopleError || serviceError) {
       return NextResponse.json({
         ok: false,
         env: {
@@ -69,6 +71,7 @@ export async function GET() {
           survey_records: surveyError ? formatError(surveyError) : 'bisa diakses',
           blast_records: blastError ? formatError(blastError) : 'bisa diakses',
           blast_people: peopleError ? formatError(peopleError) : 'bisa diakses',
+          service_catalog: serviceError ? formatError(serviceError) : 'bisa diakses',
         },
       }, { status: 500 });
     }
@@ -83,6 +86,7 @@ export async function GET() {
         survey_records: 'bisa diakses',
         blast_records: 'bisa diakses',
         blast_people: 'bisa diakses',
+        service_catalog: 'bisa diakses',
       },
     });
   } catch (error) {

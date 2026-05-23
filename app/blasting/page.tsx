@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { readSheet } from 'read-excel-file/browser';
 import writeXlsxFile from 'write-excel-file/browser';
 import { serviceToSlug, serviceTypes, withBasePath } from '../services';
+import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type BlastPerson = {
   id: string;
@@ -166,6 +167,7 @@ const parseImportServices = (row: Record<string, unknown>) => {
 
 export default function BlastingPage() {
   const [people, setPeople] = useState<BlastPerson[]>([]);
+  const [availableServices, setAvailableServices] = useState(serviceTypes);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
   const [newPerson, setNewPerson] = useState(emptyPerson);
@@ -186,9 +188,27 @@ export default function BlastingPage() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
 
   useEffect(() => {
+    loadServices();
     loadPeople();
     refreshHistory();
   }, []);
+
+  const loadServices = async () => {
+    try {
+      const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+      const payload = await response.json() as { services?: Array<{ name: string }> };
+      const names = payload.services?.map((service) => service.name).filter(Boolean);
+      if (names?.length) {
+        setAvailableServices(names);
+        setNewPerson((current) => ({
+          ...current,
+          serviceTypes: current.serviceTypes.length ? current.serviceTypes : [names[0]],
+        }));
+      }
+    } catch {
+      setAvailableServices(serviceTypes);
+    }
+  };
 
   const readyPeople = useMemo(
     () => people.filter((person) => person.name.trim() && getPersonServices(person).length > 0),
@@ -392,13 +412,13 @@ export default function BlastingPage() {
         Nama: 'Alif Brazali',
         WhatsApp: '085695763976',
         Email: 'alif@example.com',
-        Layanan: serviceTypes.slice(0, 2).join(', '),
+        Layanan: availableServices.slice(0, 2).join(', '),
       },
       {
         Nama: 'Anne',
         WhatsApp: '085695763976',
         Email: 'anne@example.com',
-        Layanan: serviceTypes[0] || '',
+        Layanan: availableServices[0] || '',
       },
     ];
     const columns = [
@@ -668,27 +688,17 @@ export default function BlastingPage() {
 
   return (
     <main className="page-shell admin-shell">
-      <div className="survey-header admin-header">
-        <div className="brand-block">
-          <img
-            className="brand-image"
-            src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png"
-            alt="Genesis"
-          />
-          <div className="admin-brand-text">
-            <p className="agency">Admin Dashboard</p>
-            <h1>Blasting</h1>
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-link-row">
-        <div className="admin-actions">
-          <a className="admin-link" href={withBasePath('/admin')}>Kembali ke Admin</a>
-          <a className="admin-link" href={withBasePath('/list')}>Pilih Layanan</a>
-          <a className="admin-link secondary-admin-link" href={withBasePath('/api/logout')}>Logout</a>
-        </div>
-      </div>
+      <AdminHeader
+        eyebrow="Admin Dashboard"
+        title="Blasting"
+        currentPath="/blasting"
+        actions={[
+          { href: '/admin', label: 'Dashboard' },
+          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/blasting', label: 'Blasting' },
+          { href: '/list', label: 'List Layanan' },
+        ]}
+      />
 
       <section className="blast-action-grid">
         <button
@@ -739,7 +749,7 @@ export default function BlastingPage() {
             Filter Layanan
             <select value={peopleServiceFilter} onChange={(event) => setPeopleServiceFilter(event.target.value)}>
               <option value="">Semua layanan</option>
-              {serviceTypes.map((service) => (
+              {availableServices.map((service) => (
                 <option key={service} value={service}>{service}</option>
               ))}
             </select>
@@ -776,7 +786,7 @@ export default function BlastingPage() {
           <label>
             Layanan
             <div className="service-checkbox-list">
-              {serviceTypes.map((service) => (
+              {availableServices.map((service) => (
                 <label key={service} className="service-checkbox-item">
                   <input
                     type="checkbox"
@@ -863,7 +873,7 @@ export default function BlastingPage() {
                       <td>
                         {isEditing ? (
                           <div className="service-checkbox-list compact-service-list">
-                            {serviceTypes.map((service) => (
+                            {availableServices.map((service) => (
                               <label key={service} className="service-checkbox-item">
                                 <input
                                   type="checkbox"
@@ -945,7 +955,7 @@ export default function BlastingPage() {
             Filter Layanan
             <select value={historyServiceFilter} onChange={(event) => setHistoryServiceFilter(event.target.value)}>
               <option value="">Semua layanan</option>
-              {serviceTypes.map((service) => (
+              {availableServices.map((service) => (
                 <option key={service} value={service}>{service}</option>
               ))}
             </select>
@@ -1105,6 +1115,7 @@ export default function BlastingPage() {
           </div>
         </div>
       )}
+      <AdminFooter />
     </main>
   );
 }

@@ -46,6 +46,21 @@ const allowedAnswers = new Set([
   'Sangat Setuju',
 ]);
 
+const getAllowedServices = async () => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('service_catalog')
+      .select('name')
+      .eq('active', true);
+    if (error) throw error;
+    const services = (data as Array<{ name?: string }>).map((row) => row.name).filter((name): name is string => Boolean(name));
+    return services.length > 0 ? services : serviceTypes;
+  } catch {
+    return serviceTypes;
+  }
+};
+
 export async function GET() {
   try {
     const supabase = getSupabase();
@@ -81,7 +96,8 @@ export async function POST(request: NextRequest) {
     };
     const comments = survey.comments?.trim() || '';
 
-    if (!serviceTypes.includes(profile.serviceType)) {
+    const allowedServices = await getAllowedServices();
+    if (!allowedServices.includes(profile.serviceType)) {
       return NextResponse.json({ error: 'Jenis layanan tidak valid.' }, { status: 400 });
     }
     if (!comments) {

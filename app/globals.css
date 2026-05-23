@@ -203,6 +203,16 @@ select {
   padding: 24px;
 }
 
+.app-footer {
+  margin-top: 32px;
+  padding: 22px 8px 4px;
+  border-top: 1px solid #dbe5f2;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .survey-header {
   display: flex;
   flex-wrap: wrap;
@@ -260,6 +270,62 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 18px;
+  border: 1px solid rgba(15, 78, 184, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.admin-title-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.admin-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  min-width: 92px;
+  height: 72px;
+}
+
+.admin-brand-mark img {
+  max-width: 100%;
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.admin-title-row p {
+  margin: 0 0 4px;
+  color: #475569;
+  font-weight: 700;
+}
+
+.admin-title-row h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .admin-link,
@@ -511,6 +577,13 @@ select {
   margin-bottom: 24px;
 }
 
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
 .summary-card,
 .table-card {
   background: #ffffff;
@@ -532,6 +605,31 @@ select {
   margin: 18px 0 0;
   color: #0f4eb8;
   font-weight: 800;
+}
+
+.summary-card p small {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.loading-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .summary-card.wide-card {
@@ -772,6 +870,60 @@ select {
 .service-link-list {
   display: grid;
   gap: 12px;
+}
+
+.service-admin-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.service-admin-form label {
+  display: grid;
+  gap: 8px;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.service-admin-form input,
+.service-admin-actions input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.service-admin-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.service-admin-actions {
+  min-width: 280px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.danger-button {
+  color: #b91c1c;
 }
 
 .service-link-item {
@@ -1201,15 +1353,32 @@ select {
 }
 
 @media (max-width: 1080px) {
-  .dashboard-grid {
+  .dashboard-grid,
+  .admin-kpi-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-nav {
+    justify-content: flex-start;
   }
 
   .blast-action-grid,
   .add-person-form,
+  .service-admin-form,
+  .service-admin-item,
   .filter-row,
   .history-filter-row {
     grid-template-columns: 1fr;
+  }
+
+  .service-admin-actions {
+    min-width: 0;
+    justify-content: flex-start;
   }
 
   .add-person-form .download-button {
@@ -1460,6 +1629,17 @@ select {
 .admin-data-message {
   margin: -6px 0 18px;
   color: #475569;
+}
+
+.admin-data-message.is-loading::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: #0f4eb8;
+  box-shadow: 0 0 0 5px rgba(15, 78, 184, 0.12);
 }
 
 .submit-button:disabled,

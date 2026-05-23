@@ -17,6 +17,7 @@ import {
   loadSurveyRecords,
   SurveyRecord,
 } from '../admin/report-utils';
+import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 const average = (values: number[]) => {
   if (values.length === 0) return 0;
@@ -33,11 +34,16 @@ const getRecordAverage = (record: SurveyRecord, prefix: 'service' | 'anti') => {
 
 export default function MonitoringPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
-  const [loadMessage, setLoadMessage] = useState('Memuat data survey...');
+  const [loadMessage, setLoadMessage] = useState('Sinkronisasi data response...');
+  const [isLoading, setIsLoading] = useState(true);
+  const [availableServices, setAvailableServices] = useState(serviceTypes);
   const [selectedService, setSelectedService] = useState(serviceTypes[0] ?? '');
 
   useEffect(() => {
     const loadRecords = async () => {
+      const localRecords = loadSurveyRecords();
+      if (localRecords.length > 0) setRecords(localRecords);
+
       try {
         const response = await fetch(withBasePath('/api/surveys/'), { cache: 'no-store' });
         const payload = await response.json() as { records?: SurveyRecord[]; error?: string };
@@ -47,22 +53,40 @@ export default function MonitoringPage() {
         setRecords(payload.records ?? []);
         setLoadMessage('Data diambil dari Supabase.');
       } catch (error) {
-        setRecords(loadSurveyRecords());
+        setRecords(localRecords);
         setLoadMessage(error instanceof Error ? error.message : 'Menampilkan data lokal browser.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadRecords();
+
+    const loadServices = async () => {
+      try {
+        const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+        const payload = await response.json() as { services?: Array<{ name: string }> };
+        const names = payload.services?.map((service) => service.name).filter(Boolean);
+        if (names?.length) {
+          setAvailableServices(names);
+          setSelectedService((current) => (names.includes(current) ? current : names[0]));
+        }
+      } catch {
+        setAvailableServices(serviceTypes);
+      }
+    };
+
+    loadServices();
   }, []);
 
-  const chartData = useMemo(() => {
-    const serviceAverage = average(records.map((record) => getRecordAverage(record, 'service')).filter(Boolean));
-    const antiAverage = average(records.map((record) => getRecordAverage(record, 'anti')).filter(Boolean));
-    return [
-      { label: 'Kepuasan Layanan', value: serviceAverage },
-      { label: 'Persepsi Anti Korupsi', value: antiAverage },
-    ];
-  }, [records]);
+  const serviceAverage = useMemo(
+    () => average(records.map((record) => getRecordAverage(record, 'service')).filter(Boolean)),
+    [records],
+  );
+  const antiAverage = useMemo(
+    () => average(records.map((record) => getRecordAverage(record, 'anti')).filter(Boolean)),
+    [records],
+  );
   const skmCalculation = useMemo(
     () => getSkmCalculation(records, selectedService),
     [records, selectedService],
@@ -70,33 +94,28 @@ export default function MonitoringPage() {
 
   return (
     <main className="page-shell admin-shell">
-      <div className="survey-header admin-header">
-        <div className="brand-block">
-          <img className="brand-image" src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png" alt="Genesis" />
-          <div className="admin-brand-text">
-            <p className="agency">Admin Monitoring</p>
-            <h1>Monitoring Response</h1>
-          </div>
-        </div>
-      </div>
+      <AdminHeader
+        eyebrow="Admin Monitoring"
+        title="Monitoring Response"
+        currentPath="/monitoring"
+        actions={[
+          { href: '/admin', label: 'Dashboard' },
+          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/blasting', label: 'Blasting' },
+          { href: '/list', label: 'List Layanan' },
+        ]}
+      />
 
-      <div className="admin-link-row">
-        <div className="admin-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-          <a className="admin-link" href={withBasePath('/admin')}>Dashboard</a>
-          <a className="admin-link" href={withBasePath('/blasting')}>Blasting</a>
-          <a className="admin-link secondary-admin-link" href={withBasePath('/api/logout')} style={{ marginLeft: 'auto' }}>
-            Logout
-          </a>
-        </div>
-      </div>
-
-      {loadMessage && <p className="admin-data-message">{loadMessage}</p>}
+      {loadMessage && <p className={`admin-data-message ${isLoading ? 'is-loading' : ''}`}>{loadMessage}</p>}
 
       <section className="chart-grid admin-chart-grid">
-        <div className="chart-card">
+        <div className={`chart-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Grafik Rata-rata Inputan User</h2>
           <div className="bar-chart-grid">
-            {chartData.map((row) => (
+            {[
+              { label: 'Kepuasan Layanan', value: serviceAverage },
+              { label: 'Persepsi Anti Korupsi', value: antiAverage },
+            ].map((row) => (
               <div key={row.label} className="bar-row">
                 <span>{row.label}</span>
                 <div className="bar-track">
@@ -107,7 +126,7 @@ export default function MonitoringPage() {
             ))}
           </div>
         </div>
-        <div className="chart-card small-chart-card">
+        <div className={`chart-card small-chart-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Total Response</h2>
           <div className="metric-block">
             <div>
@@ -205,7 +224,7 @@ export default function MonitoringPage() {
           <label>
             Pilih Layanan
             <select value={selectedService} onChange={(event) => setSelectedService(event.target.value)}>
-              {serviceTypes.map((service) => (
+              {availableServices.map((service) => (
                 <option key={service} value={service}>{service}</option>
               ))}
             </select>
@@ -328,6 +347,8 @@ export default function MonitoringPage() {
           </div>
         )}
       </section>
+
+      <AdminFooter />
     </main>
   );
 }

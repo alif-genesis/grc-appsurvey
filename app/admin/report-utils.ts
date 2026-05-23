@@ -47,7 +47,7 @@ export const answerToScale = (answer: string) => {
   return '';
 };
 
-export const getSurveySummary = (records: SurveyRecord[]) => {
+export const getSurveySummary = (records: SurveyRecord[], availableServices = serviceTypes) => {
   const actualCounts = records.reduce<Record<string, number>>((acc, record) => {
     const key = record.profile.serviceType;
     if (!key) return acc;
@@ -55,7 +55,13 @@ export const getSurveySummary = (records: SurveyRecord[]) => {
     return acc;
   }, {});
 
-  const serviceSummary = serviceTargets.map((service) => {
+  const serviceNames = Array.from(new Set([
+    ...availableServices,
+    ...records.map((record) => record.profile.serviceType).filter(Boolean),
+  ]));
+  const targets = serviceNames.map((name) => ({ name, target: 10 }));
+
+  const serviceSummary = targets.map((service) => {
     const responded = actualCounts[service.name] ?? 0;
     const gap = service.target - responded;
     const percent = service.target > 0 ? Math.round((responded / service.target) * 100) : 0;
@@ -217,8 +223,8 @@ const buildMonitoringSheet = (records: SurveyRecord[]): Row[] => {
   ];
 };
 
-export const downloadAdminSummaryExcel = async (records: SurveyRecord[]) => {
-  const summary = getSurveySummary(records);
+export const downloadAdminSummaryExcel = async (records: SurveyRecord[], availableServices = serviceTypes) => {
+  const summary = getSurveySummary(records, availableServices);
   const sheets: Sheet<Blob>[] = [{
     sheet: 'Summary',
     data: buildSummarySheet(summary),
@@ -387,8 +393,8 @@ const drawAverageChart = (doc: jsPDF, title: string, values: number[], startY: n
   });
 };
 
-export const downloadAdminSummaryPDF = async (records: SurveyRecord[]) => {
-  const summary = getSurveySummary(records);
+export const downloadAdminSummaryPDF = async (records: SurveyRecord[], availableServices = serviceTypes) => {
+  const summary = getSurveySummary(records, availableServices);
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   await addGenesisLogo(doc);
