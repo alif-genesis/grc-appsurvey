@@ -17,7 +17,7 @@ export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/adm
     <header className="admin-topbar">
       <div className="admin-title-row">
         <a className="admin-brand-mark" href={withBasePath(homeHref)} aria-label="Dashboard Admin">
-          <img src={GENESIS_LOGO_URL} alt="Genesis" />
+          <img src={GENESIS_LOGO_URL} alt="Genesis" width={280} height={100} decoding="async" />
         </a>
         <div>
           <p>{eyebrow}</p>

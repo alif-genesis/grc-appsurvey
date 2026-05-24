@@ -37,6 +37,14 @@ const withSecurityHeaders = (response: NextResponse) => {
   return response;
 };
 
+const withStaticCacheHeaders = (request: NextRequest, response: NextResponse) => {
+  const { pathname } = request.nextUrl;
+  if (pathname === '/genesis-logo.svg' || pathname.startsWith('/fonts/') || pathname.startsWith('/images/')) {
+    response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+  return response;
+};
+
 const isProtectedPath = (request: NextRequest) => {
   const { pathname } = request.nextUrl;
 
@@ -73,7 +81,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (!isProtectedPath(request)) {
-    return withSecurityHeaders(NextResponse.next());
+    return withStaticCacheHeaders(request, withSecurityHeaders(NextResponse.next()));
   }
 
   const adminSessionSecret = process.env.ADMIN_SESSION_SECRET || '';
@@ -81,7 +89,7 @@ export function proxy(request: NextRequest) {
     && request.cookies.get(ADMIN_COOKIE)?.value === adminSessionSecret;
 
   if (isLoggedIn) {
-    return withSecurityHeaders(NextResponse.next());
+    return withStaticCacheHeaders(request, withSecurityHeaders(NextResponse.next()));
   }
 
   if (request.nextUrl.pathname.startsWith('/api/')) {

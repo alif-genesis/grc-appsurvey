@@ -9,6 +9,10 @@ export default function HomePage() {
             className="landing-logo"
             src={GENESIS_LOGO_URL}
             alt="PT Genetika Solusi Bisnis"
+            width={280}
+            height={100}
+            fetchPriority="high"
+            decoding="async"
           />
         </nav>
 

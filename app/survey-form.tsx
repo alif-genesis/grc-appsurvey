@@ -250,7 +250,7 @@ export default function HomePage() {
     <main className="page-shell">
       <div className="survey-header">
         <div className="brand-row">
-          <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" />
+          <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} decoding="async" />
           <div>
             <p className="agency">Biro Hubungan Masyarakat</p>
           </div>

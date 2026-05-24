@@ -5,7 +5,7 @@ import {
   antiCorruptionQuestions,
   serviceQuestions,
 } from '../survey-constants';
-import { GENESIS_LOGO_URL, serviceTypes } from '../services';
+import { GENESIS_REPORT_LOGO_URL, serviceTypes } from '../services';
 import {
   answerToScale,
   getServiceQuality,
@@ -266,7 +266,7 @@ const loadImageDataUrl = async (url: string) => {
 
 const addGenesisLogo = async (doc: jsPDF) => {
   try {
-    const logo = await loadImageDataUrl(GENESIS_LOGO_URL);
+    const logo = await loadImageDataUrl(GENESIS_REPORT_LOGO_URL);
     const format = logo.mimeType.includes('jpeg') || logo.mimeType.includes('jpg') ? 'JPEG' : 'PNG';
     doc.addImage(logo.dataUrl, format, 40, 28, 90, 38);
   } catch {

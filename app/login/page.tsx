@@ -2,7 +2,7 @@
 
 import { FormEvent, Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { withBasePath } from '../services';
+import { GENESIS_LOGO_URL, withBasePath } from '../services';
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -40,8 +40,11 @@ function LoginForm() {
       <section className="login-panel">
         <img
           className="brand-image"
-          src="https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png"
+          src={GENESIS_LOGO_URL}
           alt="Genesis"
+          width={280}
+          height={100}
+          decoding="async"
         />
         <div>
           <p className="agency">Admin Area</p>
