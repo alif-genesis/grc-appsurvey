@@ -364,12 +364,14 @@ select {
 }
 
 .secondary-admin-link {
-  background: #334155;
+  background: #0f766e;
+  box-shadow: 0 12px 28px rgba(15, 118, 110, 0.18);
 }
 
 .active-admin-link {
   outline: 3px solid rgba(15, 78, 184, 0.18);
-  background: #0f766e;
+  background: #1d72d2;
+  box-shadow: 0 0 0 5px rgba(29, 114, 210, 0.16), 0 14px 30px rgba(15, 78, 184, 0.22);
 }
 
 .control-create-panel p,

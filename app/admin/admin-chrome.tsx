@@ -29,7 +29,11 @@ export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/adm
         {actions.map((action) => (
           <a
             key={action.href}
-            className={action.secondary ? 'admin-link secondary-admin-link' : 'admin-link'}
+            className={[
+              'admin-link',
+              action.secondary ? 'secondary-admin-link' : '',
+              action.href === currentPath ? 'active-admin-link' : '',
+            ].filter(Boolean).join(' ')}
             href={withBasePath(action.href)}
           >
             {action.label}
