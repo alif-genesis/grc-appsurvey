@@ -16,6 +16,7 @@ import {
   getSkmCalculation,
   loadSurveyRecords,
   SurveyRecord,
+  type CalculationScale,
 } from '../admin/report-utils';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
@@ -24,10 +25,10 @@ const average = (values: number[]) => {
   return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
 };
 
-const getRecordAverage = (record: SurveyRecord, prefix: 'service' | 'anti') => {
+const getRecordAverage = (record: SurveyRecord, prefix: 'service' | 'anti', calculationScale: CalculationScale) => {
   const questions = prefix === 'service' ? serviceQuestions : antiCorruptionQuestions;
   const values = questions
-    .map((_, index) => answerToScale(record.responses[`${prefix}-${index + 1}`] ?? ''))
+    .map((_, index) => answerToScale(record.responses[`${prefix}-${index + 1}`] ?? '', calculationScale))
     .filter((value): value is number => typeof value === 'number');
   return average(values);
 };
@@ -37,7 +38,9 @@ export default function MonitoringPage() {
   const [loadMessage, setLoadMessage] = useState('Sinkronisasi data response...');
   const [isLoading, setIsLoading] = useState(true);
   const [availableServices, setAvailableServices] = useState(serviceTypes);
-  const [selectedService, setSelectedService] = useState(serviceTypes[0] ?? '');
+  const [responseServiceFilter, setResponseServiceFilter] = useState('');
+  const [selectedService, setSelectedService] = useState('');
+  const [calculationScale, setCalculationScale] = useState<CalculationScale>(4);
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -69,7 +72,8 @@ export default function MonitoringPage() {
         const names = payload.services?.map((service) => service.name).filter(Boolean);
         if (names?.length) {
           setAvailableServices(names);
-          setSelectedService((current) => (names.includes(current) ? current : names[0]));
+          setResponseServiceFilter((current) => (current && !names.includes(current) ? '' : current));
+          setSelectedService((current) => (current && !names.includes(current) ? '' : current));
         }
       } catch {
         setAvailableServices(serviceTypes);
@@ -80,16 +84,29 @@ export default function MonitoringPage() {
   }, []);
 
   const serviceAverage = useMemo(
-    () => average(records.map((record) => getRecordAverage(record, 'service')).filter(Boolean)),
-    [records],
+    () => average(records.map((record) => getRecordAverage(record, 'service', calculationScale)).filter(Boolean)),
+    [records, calculationScale],
   );
   const antiAverage = useMemo(
-    () => average(records.map((record) => getRecordAverage(record, 'anti')).filter(Boolean)),
-    [records],
+    () => average(records.map((record) => getRecordAverage(record, 'anti', calculationScale)).filter(Boolean)),
+    [records, calculationScale],
   );
   const skmCalculation = useMemo(
-    () => getSkmCalculation(records, selectedService),
-    [records, selectedService],
+    () => getSkmCalculation(records, selectedService, calculationScale),
+    [records, selectedService, calculationScale],
+  );
+  const serviceFilterOptions = useMemo(
+    () => Array.from(new Set([
+      ...availableServices,
+      ...records.map((record) => record.profile.serviceType).filter(Boolean),
+    ])),
+    [availableServices, records],
+  );
+  const filteredResponseRecords = useMemo(
+    () => responseServiceFilter
+      ? records.filter((record) => record.profile.serviceType === responseServiceFilter)
+      : records,
+    [records, responseServiceFilter],
   );
 
   return (
@@ -108,6 +125,19 @@ export default function MonitoringPage() {
 
       {loadMessage && <p className={`admin-data-message ${isLoading ? 'is-loading' : ''}`}>{loadMessage}</p>}
 
+      <section className="calculation-scale-panel">
+        <label>
+          Perhitungan
+          <select
+            value={calculationScale}
+            onChange={(event) => setCalculationScale(Number(event.target.value) as CalculationScale)}
+          >
+            <option value={4}>Perhitungan Skala 4</option>
+            <option value={5}>Perhitungan Skala 5</option>
+          </select>
+        </label>
+      </section>
+
       <section className="chart-grid admin-chart-grid">
         <div className={`chart-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Grafik Rata-rata Inputan User</h2>
@@ -119,9 +149,9 @@ export default function MonitoringPage() {
               <div key={row.label} className="bar-row">
                 <span>{row.label}</span>
                 <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${Math.min(100, (row.value / 4) * 100)}%` }} />
+                  <div className="bar-fill" style={{ width: `${Math.min(100, (row.value / calculationScale) * 100)}%` }} />
                 </div>
-                <strong>{row.value || '-'} / 4</strong>
+                <strong>{row.value || '-'} / {calculationScale}</strong>
               </div>
             ))}
           </div>
@@ -145,15 +175,26 @@ export default function MonitoringPage() {
         <div className="section-heading-row">
           <h2>Detail Response Seluruh Responden</h2>
           <div className="inline-actions">
-            <button type="button" className="download-button" onClick={() => downloadMonitoringExcel(records)}>
+            <button type="button" className="download-button" onClick={() => downloadMonitoringExcel(filteredResponseRecords, calculationScale)}>
               Download Excel
             </button>
-            <button type="button" className="download-button" onClick={() => downloadMonitoringPDF(records)}>
+            <button type="button" className="download-button" onClick={() => downloadMonitoringPDF(filteredResponseRecords, calculationScale)}>
               Download PDF
             </button>
           </div>
         </div>
-        {records.length === 0 ? (
+        <div className="filter-row single-filter-row">
+          <label>
+            Filter Layanan
+            <select value={responseServiceFilter} onChange={(event) => setResponseServiceFilter(event.target.value)}>
+              <option value="">Seluruh Layanan</option>
+              {serviceFilterOptions.map((service) => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {filteredResponseRecords.length === 0 ? (
           <p>Tidak ada data survei tersimpan.</p>
         ) : (
           <div className="monitoring-table-wrapper">
@@ -165,16 +206,22 @@ export default function MonitoringPage() {
                   <th>Direktorat</th>
                   <th>Jenis Layanan</th>
                   {serviceQuestions.map((_, index) => (
-                    <th key={`service-head-${index}`}>Kepuasan {index + 1}</th>
+                    <th key={`service-head-${index}`}>
+                      Kepuasan {index + 1}
+                      <span className="scale-header-note">Skala {calculationScale}</span>
+                    </th>
                   ))}
                   {antiCorruptionQuestions.map((_, index) => (
-                    <th key={`anti-head-${index}`}>Anti Korupsi {index + 1}</th>
+                    <th key={`anti-head-${index}`}>
+                      Anti Korupsi {index + 1}
+                      <span className="scale-header-note">Skala {calculationScale}</span>
+                    </th>
                   ))}
                   <th>Kritik/Saran</th>
                 </tr>
               </thead>
               <tbody>
-                {records.map((record) => (
+                {filteredResponseRecords.map((record) => (
                   <tr key={record.id}>
                     <td>{new Date(record.createdAt).toLocaleString('id-ID')}</td>
                     <td>{record.profile.name || '-'}</td>
@@ -185,7 +232,7 @@ export default function MonitoringPage() {
                       return (
                         <td key={`service-${record.id}-${index}`}>
                           {answer || '-'}
-                          <span className="scale-pill">Skala {answerToScale(answer) || '-'}</span>
+                          <span className="scale-value">{answerToScale(answer, calculationScale) || '-'}</span>
                         </td>
                       );
                     })}
@@ -194,7 +241,7 @@ export default function MonitoringPage() {
                       return (
                         <td key={`anti-${record.id}-${index}`}>
                           {answer || '-'}
-                          <span className="scale-pill">Skala {answerToScale(answer) || '-'}</span>
+                          <span className="scale-value">{answerToScale(answer, calculationScale) || '-'}</span>
                         </td>
                       );
                     })}
@@ -224,7 +271,8 @@ export default function MonitoringPage() {
           <label>
             Pilih Layanan
             <select value={selectedService} onChange={(event) => setSelectedService(event.target.value)}>
-              {availableServices.map((service) => (
+              <option value="">Seluruh Layanan</option>
+              {serviceFilterOptions.map((service) => (
                 <option key={service} value={service}>{service}</option>
               ))}
             </select>
@@ -237,7 +285,7 @@ export default function MonitoringPage() {
             <small>{getServiceQuality(skmCalculation.serviceSkm100)}</small>
             <div className="skm-score-value">
               <strong>{skmCalculation.serviceSkm100 || '-'}</strong>
-              <em>Skala 4: {skmCalculation.serviceSkm4 || '-'}</em>
+              <em>Skala {calculationScale}: {skmCalculation.serviceSkmScale || '-'}</em>
             </div>
           </div>
           <div className="skm-score-card">
@@ -245,7 +293,7 @@ export default function MonitoringPage() {
             <small>{getServiceQuality(skmCalculation.antiSkm100)}</small>
             <div className="skm-score-value">
               <strong>{skmCalculation.antiSkm100 || '-'}</strong>
-              <em>Skala 4: {skmCalculation.antiSkm4 || '-'}</em>
+              <em>Skala {calculationScale}: {skmCalculation.antiSkmScale || '-'}</em>
             </div>
           </div>
         </div>
@@ -277,13 +325,13 @@ export default function MonitoringPage() {
                     <td>{index + 1}</td>
                     {skmCalculation.serviceResults.map((_, questionIndex) => (
                       <td key={`skm-service-${record.id}-${questionIndex}`}>
-                        {answerToScale(record.responses[`service-${questionIndex + 1}`] ?? '') || '-'}
+                        {answerToScale(record.responses[`service-${questionIndex + 1}`] ?? '', calculationScale) || '-'}
                       </td>
                     ))}
                     <td>{index + 1}</td>
                     {skmCalculation.antiResults.map((_, questionIndex) => (
                       <td key={`skm-anti-${record.id}-${questionIndex}`}>
-                        {answerToScale(record.responses[`anti-${questionIndex + 1}`] ?? '') || '-'}
+                        {answerToScale(record.responses[`anti-${questionIndex + 1}`] ?? '', calculationScale) || '-'}
                       </td>
                     ))}
                   </tr>

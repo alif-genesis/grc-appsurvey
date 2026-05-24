@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { readSheet } from 'read-excel-file/browser';
 import writeXlsxFile from 'write-excel-file/browser';
-import { serviceToSlug, serviceTypes, withBasePath } from '../services';
+import { serviceToSlug, serviceTypes, withBasePath, withPublicSurveyUrl } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type BlastPerson = {
@@ -72,8 +72,7 @@ const sleep = (ms: number) => new Promise((resolve) => {
 const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
 const getMultiSurveyLink = () => withBasePath('/multi-survey');
 const getAbsoluteLink = (path: string) => {
-  if (typeof window === 'undefined') return path;
-  return new URL(path, window.location.origin).toString();
+  return withPublicSurveyUrl(path);
 };
 
 const getPersonServices = (person: Pick<BlastPerson, 'serviceType' | 'serviceTypes'>) => (

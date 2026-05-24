@@ -27,6 +27,8 @@ export const SURVEY_STORAGE_KEY = 'genesis-survey-records';
 
 export const serviceTargets = serviceTypes.map((name) => ({ name, target: 10 }));
 
+export type CalculationScale = 4 | 5;
+
 export const loadSurveyRecords = (): SurveyRecord[] => {
   if (typeof window === 'undefined') return [];
   try {
@@ -37,12 +39,18 @@ export const loadSurveyRecords = (): SurveyRecord[] => {
   }
 };
 
-export const answerToScale = (answer: string) => {
+export const answerToScale = (answer: string, calculationScale: CalculationScale = 4) => {
   const serviceIndex = serviceOptions.indexOf(answer);
-  if (serviceIndex >= 0) return serviceIndex + 1;
+  if (serviceIndex >= 0) {
+    const scale4Value = serviceIndex + 1;
+    return calculationScale === 5 && scale4Value >= 3 ? scale4Value + 1 : scale4Value;
+  }
 
   const antiIndex = antiCorruptionOptions.indexOf(answer);
-  if (antiIndex >= 0) return antiIndex + 1;
+  if (antiIndex >= 0) {
+    const scale4Value = antiIndex + 1;
+    return calculationScale === 5 && scale4Value >= 3 ? scale4Value + 1 : scale4Value;
+  }
 
   return '';
 };
@@ -97,12 +105,14 @@ export type SkmQuestionResult = {
 
 export type SkmCalculation = {
   serviceName: string;
+  calculationScale: CalculationScale;
+  maxScale: number;
   records: SurveyRecord[];
   serviceResults: SkmQuestionResult[];
   antiResults: SkmQuestionResult[];
-  serviceSkm4: number;
+  serviceSkmScale: number;
   serviceSkm100: number;
-  antiSkm4: number;
+  antiSkmScale: number;
   antiSkm100: number;
 };
 
@@ -114,12 +124,13 @@ const getQuestionResults = (
   questions: string[],
   prefix: 'service' | 'anti',
   codePrefix: string,
+  calculationScale: CalculationScale,
 ) => {
   const weight = questions.length > 0 ? 1 / questions.length : 0;
 
   return questions.map((question, index) => {
     const total = records.reduce((sum, record) => {
-      const scale = answerToScale(record.responses[`${prefix}-${index + 1}`] ?? '');
+      const scale = answerToScale(record.responses[`${prefix}-${index + 1}`] ?? '', calculationScale);
       return sum + (typeof scale === 'number' ? scale : 0);
     }, 0);
     const nrr = records.length > 0 ? total / records.length : 0;
@@ -133,24 +144,31 @@ const getQuestionResults = (
   });
 };
 
-export const getSkmCalculation = (records: SurveyRecord[], serviceName: string): SkmCalculation => {
+export const getSkmCalculation = (
+  records: SurveyRecord[],
+  serviceName: string,
+  calculationScale: CalculationScale = 4,
+): SkmCalculation => {
   const filteredRecords = serviceName
     ? records.filter((record) => record.profile.serviceType === serviceName)
     : records;
-  const serviceResults = getQuestionResults(filteredRecords, serviceQuestions, 'service', 'U');
-  const antiResults = getQuestionResults(filteredRecords, antiCorruptionQuestions, 'anti', 'A');
-  const serviceSkm4 = serviceResults.reduce((sum, result) => sum + result.weightedNrr, 0);
-  const antiSkm4 = antiResults.reduce((sum, result) => sum + result.weightedNrr, 0);
+  const maxScale = calculationScale;
+  const serviceResults = getQuestionResults(filteredRecords, serviceQuestions, 'service', 'U', calculationScale);
+  const antiResults = getQuestionResults(filteredRecords, antiCorruptionQuestions, 'anti', 'A', calculationScale);
+  const serviceSkmScale = serviceResults.reduce((sum, result) => sum + result.weightedNrr, 0);
+  const antiSkmScale = antiResults.reduce((sum, result) => sum + result.weightedNrr, 0);
 
   return {
     serviceName,
+    calculationScale,
+    maxScale,
     records: filteredRecords,
     serviceResults,
     antiResults,
-    serviceSkm4: round3(serviceSkm4),
-    serviceSkm100: round2(serviceSkm4 * 25),
-    antiSkm4: round3(antiSkm4),
-    antiSkm100: round2(antiSkm4 * 25),
+    serviceSkmScale: round3(serviceSkmScale),
+    serviceSkm100: round2(serviceSkmScale * (100 / maxScale)),
+    antiSkmScale: round3(antiSkmScale),
+    antiSkm100: round2(antiSkmScale * (100 / maxScale)),
   };
 };
 
@@ -166,6 +184,27 @@ const cell = (value: string | number, bold = false) => ({
   value,
   fontWeight: bold ? 'bold' as const : undefined,
 });
+
+const formulaCell = (value: string, bold = false) => ({
+  value,
+  type: 'Formula' as const,
+  fontWeight: bold ? 'bold' as const : undefined,
+});
+
+const excelColumn = (columnNumber: number) => {
+  let column = '';
+  let value = columnNumber;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    column = String.fromCharCode(65 + remainder) + column;
+    value = Math.floor((value - 1) / 26);
+  }
+  return column;
+};
+
+const qualityFormula = (scoreCell: string) => (
+  `IF(${scoreCell}>=88.31,"A (Sangat Baik)",IF(${scoreCell}>=76.61,"B (Baik)",IF(${scoreCell}>=65,"C (Kurang Baik)",IF(${scoreCell}>=25,"D (Tidak Baik)","-"))))`
+);
 
 const buildSummarySheet = (summary: ReturnType<typeof getSurveySummary>): Row[] => [
   [cell('Persentase Pemenuhan Target', true)],
@@ -184,7 +223,7 @@ const buildSummarySheet = (summary: ReturnType<typeof getSurveySummary>): Row[] 
   ]),
 ];
 
-const buildMonitoringSheet = (records: SurveyRecord[]): Row[] => {
+const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: CalculationScale): Row[] => {
   const header = [
     'Tanggal',
     'Nama Lengkap',
@@ -192,12 +231,12 @@ const buildMonitoringSheet = (records: SurveyRecord[]): Row[] => {
     'Jenis Layanan',
     ...serviceQuestions.flatMap((question, index) => [
       `Kepuasan ${index + 1}`,
-      `Skala Kepuasan ${index + 1}`,
+      `Skala ${calculationScale} Kepuasan ${index + 1}`,
       `Pertanyaan Kepuasan ${index + 1}`,
     ]),
     ...antiCorruptionQuestions.flatMap((question, index) => [
       `Anti Korupsi ${index + 1}`,
-      `Skala Anti Korupsi ${index + 1}`,
+      `Skala ${calculationScale} Anti Korupsi ${index + 1}`,
       `Pertanyaan Anti Korupsi ${index + 1}`,
     ]),
     'Kritik/Saran',
@@ -212,11 +251,11 @@ const buildMonitoringSheet = (records: SurveyRecord[]): Row[] => {
       record.profile.serviceType,
       ...serviceQuestions.flatMap((question, index) => {
         const answer = record.responses[`service-${index + 1}`] ?? '';
-        return [answer, answerToScale(answer), question];
+        return [answer, answerToScale(answer, calculationScale), question];
       }),
       ...antiCorruptionQuestions.flatMap((question, index) => {
         const answer = record.responses[`anti-${index + 1}`] ?? '';
-        return [answer, answerToScale(answer), question];
+        return [answer, answerToScale(answer, calculationScale), question];
       }),
       record.comments,
     ]),
@@ -234,10 +273,10 @@ export const downloadAdminSummaryExcel = async (records: SurveyRecord[], availab
   await writeXlsxFile(sheets).toFile(`summary-survei-${new Date().toISOString().slice(0, 10)}.xlsx`);
 };
 
-export const downloadMonitoringExcel = async (records: SurveyRecord[]) => {
+export const downloadMonitoringExcel = async (records: SurveyRecord[], calculationScale: CalculationScale = 4) => {
   const sheets: Sheet<Blob>[] = [{
     sheet: 'Response Detail',
-    data: buildMonitoringSheet(records),
+    data: buildMonitoringSheet(records, calculationScale),
     columns: [
       { width: 22 },
       { width: 24 },
@@ -256,6 +295,41 @@ export const downloadMonitoringExcel = async (records: SurveyRecord[]) => {
 };
 
 const buildSkmSheet = (calculation: SkmCalculation): Row[] => {
+  const dataStartRow = 7;
+  const dataEndRow = dataStartRow + calculation.records.length - 1;
+  const totalRow = dataStartRow + calculation.records.length;
+  const nrrRow = totalRow + 1;
+  const weightedRow = totalRow + 2;
+  const serviceSkmScaleRow = weightedRow + 2;
+  const serviceSkm100Row = serviceSkmScaleRow + 1;
+  const antiSkmScaleRow = serviceSkm100Row + 1;
+  const antiSkm100Row = antiSkmScaleRow + 1;
+  const serviceStartColumn = 2;
+  const serviceEndColumn = serviceStartColumn + calculation.serviceResults.length - 1;
+  const antiStartColumn = serviceEndColumn + 3;
+  const antiEndColumn = antiStartColumn + calculation.antiResults.length - 1;
+  const getDataRange = (columnNumber: number) => {
+    const column = excelColumn(columnNumber);
+    return calculation.records.length > 0 ? `${column}${dataStartRow}:${column}${dataEndRow}` : '';
+  };
+  const totalFormula = (columnNumber: number) => {
+    const range = getDataRange(columnNumber);
+    return range ? `SUM(${range})` : '0';
+  };
+  const nrrFormula = (columnNumber: number) => {
+    const column = excelColumn(columnNumber);
+    const range = getDataRange(columnNumber);
+    return range ? `IF(COUNT(${range})=0,0,${column}${totalRow}/COUNT(${range}))` : '0';
+  };
+  const weightedFormula = (columnNumber: number, questionCount: number) => {
+    const column = excelColumn(columnNumber);
+    return questionCount > 0 ? `${column}${nrrRow}/${questionCount}` : '0';
+  };
+  const sumWeightedFormula = (startColumn: number, endColumn: number) => (
+    startColumn <= endColumn
+      ? `ROUND(SUM(${excelColumn(startColumn)}${weightedRow}:${excelColumn(endColumn)}${weightedRow}),3)`
+      : '0'
+  );
   const header = [
     cell('No. Resp', true),
     ...calculation.serviceResults.map((result) => cell(result.code, true)),
@@ -268,39 +342,43 @@ const buildSkmSheet = (calculation: SkmCalculation): Row[] => {
   return [
     [cell('Perhitungan SKM', true), calculation.serviceName || 'Semua Layanan'],
     [],
+    [cell('Skala penilaian', true), `Skala ${calculation.calculationScale}`],
+    [],
     [cell('Nilai Unsur Pelayanan', true), ...Array.from({ length: calculation.serviceResults.length - 1 }).map(() => null), null, cell('Nilai Unsur Persepsi Anti Korupsi', true)],
     header,
     ...calculation.records.map((record, index) => [
       index + 1,
-      ...calculation.serviceResults.map((_, questionIndex) => answerToScale(record.responses[`service-${questionIndex + 1}`] ?? '') || ''),
+      ...calculation.serviceResults.map((_, questionIndex) => answerToScale(record.responses[`service-${questionIndex + 1}`] ?? '', calculation.calculationScale) || ''),
       null,
       index + 1,
-      ...calculation.antiResults.map((_, questionIndex) => answerToScale(record.responses[`anti-${questionIndex + 1}`] ?? '') || ''),
+      ...calculation.antiResults.map((_, questionIndex) => answerToScale(record.responses[`anti-${questionIndex + 1}`] ?? '', calculation.calculationScale) || ''),
     ]),
     [
       cell('Nilai Unsur', true),
-      ...calculation.serviceResults.map((result) => result.total),
+      ...calculation.serviceResults.map((_, index) => formulaCell(totalFormula(serviceStartColumn + index))),
       null,
       cell('Nilai Unsur', true),
-      ...calculation.antiResults.map((result) => result.total),
+      ...calculation.antiResults.map((_, index) => formulaCell(totalFormula(antiStartColumn + index))),
     ],
     [
       cell('NRR / Unsur', true),
-      ...calculation.serviceResults.map((result) => result.nrr),
+      ...calculation.serviceResults.map((_, index) => formulaCell(nrrFormula(serviceStartColumn + index))),
       null,
       cell('NRR / Unsur', true),
-      ...calculation.antiResults.map((result) => result.nrr),
+      ...calculation.antiResults.map((_, index) => formulaCell(nrrFormula(antiStartColumn + index))),
     ],
     [
       cell('NRR tertimbang / unsur', true),
-      ...calculation.serviceResults.map((result) => result.weightedNrr),
+      ...calculation.serviceResults.map((_, index) => formulaCell(weightedFormula(serviceStartColumn + index, calculation.serviceResults.length))),
       null,
       cell('NRR tertimbang / unsur', true),
-      ...calculation.antiResults.map((result) => result.weightedNrr),
+      ...calculation.antiResults.map((_, index) => formulaCell(weightedFormula(antiStartColumn + index, calculation.antiResults.length))),
     ],
     [],
-    [cell('SKM Unit Pelayanan', true), calculation.serviceSkm100, getServiceQuality(calculation.serviceSkm100)],
-    [cell('Indeks Persepsi Anti Korupsi', true), calculation.antiSkm100, getServiceQuality(calculation.antiSkm100)],
+    [cell(`SKM Unit Pelayanan (Skala ${calculation.calculationScale})`, true), formulaCell(sumWeightedFormula(serviceStartColumn, serviceEndColumn), true)],
+    [cell('SKM Unit Pelayanan (Skala 100)', true), formulaCell(`ROUND(B${serviceSkmScaleRow}*${100 / calculation.maxScale},2)`, true), formulaCell(qualityFormula(`B${serviceSkm100Row}`))],
+    [cell(`Indeks Persepsi Anti Korupsi (Skala ${calculation.calculationScale})`, true), formulaCell(sumWeightedFormula(antiStartColumn, antiEndColumn), true)],
+    [cell('Indeks Persepsi Anti Korupsi (Skala 100)', true), formulaCell(`ROUND(B${antiSkmScaleRow}*${100 / calculation.maxScale},2)`, true), formulaCell(qualityFormula(`B${antiSkm100Row}`))],
     [],
     [cell('Keterangan Unsur', true)],
     ...Array.from({ length: maxQuestionCount }).map((_, index) => [
@@ -314,7 +392,7 @@ const buildSkmSheet = (calculation: SkmCalculation): Row[] => {
 };
 
 export const downloadSkmExcel = async (calculation: SkmCalculation) => {
-  const totalColumns = 2 + calculation.serviceResults.length + calculation.antiResults.length;
+  const totalColumns = 3 + calculation.serviceResults.length + calculation.antiResults.length;
   const sheets: Sheet<Blob>[] = [{
     sheet: 'Perhitungan SKM',
     data: buildSkmSheet(calculation),
@@ -365,11 +443,11 @@ const drawTargetChart = (doc: jsPDF, summary: ReturnType<typeof getSurveySummary
   });
 };
 
-const getAverageScale = (records: SurveyRecord[], prefix: 'service' | 'anti') => {
+const getAverageScale = (records: SurveyRecord[], prefix: 'service' | 'anti', calculationScale: CalculationScale) => {
   const keys = prefix === 'service' ? serviceQuestions : antiCorruptionQuestions;
   const values = keys.map((_, index) => {
     const scales = records
-      .map((record) => answerToScale(record.responses[`${prefix}-${index + 1}`] ?? ''))
+      .map((record) => answerToScale(record.responses[`${prefix}-${index + 1}`] ?? '', calculationScale))
       .filter((value): value is number => typeof value === 'number');
     if (scales.length === 0) return 0;
     return Number((scales.reduce((sum, value) => sum + value, 0) / scales.length).toFixed(2));
@@ -378,7 +456,14 @@ const getAverageScale = (records: SurveyRecord[], prefix: 'service' | 'anti') =>
   return values;
 };
 
-const drawAverageChart = (doc: jsPDF, title: string, values: number[], startY: number, startX: number) => {
+const drawAverageChart = (
+  doc: jsPDF,
+  title: string,
+  values: number[],
+  calculationScale: CalculationScale,
+  startY: number,
+  startX: number,
+) => {
   doc.setFontSize(12);
   doc.text(title, startX, startY);
   values.forEach((value, index) => {
@@ -388,7 +473,7 @@ const drawAverageChart = (doc: jsPDF, title: string, values: number[], startY: n
     doc.setFillColor(226, 236, 255);
     doc.rect(startX + 30, y, 120, 9, 'F');
     doc.setFillColor(15, 78, 184);
-    doc.rect(startX + 30, y, value * 30, 9, 'F');
+    doc.rect(startX + 30, y, (value / calculationScale) * 120, 9, 'F');
     doc.text(value ? value.toString() : '-', startX + 160, y + 8);
   });
 };
@@ -418,7 +503,7 @@ export const downloadAdminSummaryPDF = async (records: SurveyRecord[], available
   doc.save(`summary-survei-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
-export const downloadMonitoringPDF = async (records: SurveyRecord[]) => {
+export const downloadMonitoringPDF = async (records: SurveyRecord[], calculationScale: CalculationScale = 4) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
   await addGenesisLogo(doc);
 
@@ -427,9 +512,10 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[]) => {
   doc.setFontSize(9);
   doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 150, 64);
   doc.text(`Total response: ${records.length}`, 150, 78);
+  doc.text(`Perhitungan: Skala ${calculationScale}`, 150, 92);
 
-  drawAverageChart(doc, 'Grafik Rata-rata Skala Kepuasan Layanan', getAverageScale(records, 'service'), 105, 40);
-  drawAverageChart(doc, 'Grafik Rata-rata Skala Persepsi Anti Korupsi', getAverageScale(records, 'anti'), 105, 420);
+  drawAverageChart(doc, `Grafik Rata-rata Skala ${calculationScale} Kepuasan Layanan`, getAverageScale(records, 'service', calculationScale), calculationScale, 110, 40);
+  drawAverageChart(doc, `Grafik Rata-rata Skala ${calculationScale} Persepsi Anti Korupsi`, getAverageScale(records, 'anti', calculationScale), calculationScale, 110, 420);
 
   autoTable(doc, {
     startY: 300,
@@ -448,8 +534,8 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[]) => {
         record.profile.name,
         record.profile.directorate,
         record.profile.serviceType,
-        ...serviceQuestions.map((_, index) => answerToScale(record.responses[`service-${index + 1}`] ?? '') || '-'),
-        ...antiCorruptionQuestions.map((_, index) => answerToScale(record.responses[`anti-${index + 1}`] ?? '') || '-'),
+        ...serviceQuestions.map((_, index) => answerToScale(record.responses[`service-${index + 1}`] ?? '', calculationScale) || '-'),
+        ...antiCorruptionQuestions.map((_, index) => answerToScale(record.responses[`anti-${index + 1}`] ?? '', calculationScale) || '-'),
         record.comments,
       ];
     }),
@@ -470,13 +556,14 @@ export const downloadSkmPDF = async (calculation: SkmCalculation) => {
   doc.setFontSize(9);
   doc.text(`Layanan: ${calculation.serviceName || 'Semua Layanan'}`, 150, 64);
   doc.text(`Jumlah responden: ${calculation.records.length}`, 150, 78);
+  doc.text(`Perhitungan: Skala ${calculation.calculationScale}`, 150, 92);
 
   const maxQuestionCount = Math.max(calculation.serviceResults.length, calculation.antiResults.length);
   const body: Array<Array<string | number>> = calculation.records.map((record, index) => [
     index + 1,
-    ...calculation.serviceResults.map((_, questionIndex) => answerToScale(record.responses[`service-${questionIndex + 1}`] ?? '') || ''),
+    ...calculation.serviceResults.map((_, questionIndex) => answerToScale(record.responses[`service-${questionIndex + 1}`] ?? '', calculation.calculationScale) || ''),
     index + 1,
-    ...calculation.antiResults.map((_, questionIndex) => answerToScale(record.responses[`anti-${questionIndex + 1}`] ?? '') || ''),
+    ...calculation.antiResults.map((_, questionIndex) => answerToScale(record.responses[`anti-${questionIndex + 1}`] ?? '', calculation.calculationScale) || ''),
   ]);
 
   body.push([
@@ -514,10 +601,10 @@ export const downloadSkmPDF = async (calculation: SkmCalculation) => {
 
   autoTable(doc, {
     startY: (doc as any).lastAutoTable.finalY + 18,
-    head: [['Indikator', 'Nilai Skala 4', 'Nilai Skala 100', 'Mutu']],
+    head: [['Indikator', `Nilai Skala ${calculation.calculationScale}`, 'Nilai Skala 100', 'Mutu']],
     body: [
-      ['SKM Unit Pelayanan', calculation.serviceSkm4, calculation.serviceSkm100, getServiceQuality(calculation.serviceSkm100)],
-      ['Indeks Persepsi Anti Korupsi', calculation.antiSkm4, calculation.antiSkm100, getServiceQuality(calculation.antiSkm100)],
+      ['SKM Unit Pelayanan', calculation.serviceSkmScale, calculation.serviceSkm100, getServiceQuality(calculation.serviceSkm100)],
+      ['Indeks Persepsi Anti Korupsi', calculation.antiSkmScale, calculation.antiSkm100, getServiceQuality(calculation.antiSkm100)],
     ],
     styles: { fontSize: 8, cellPadding: 4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },

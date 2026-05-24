@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
-import { serviceToSlug } from '../../../services';
+import { serviceToSlug, withPublicSurveyUrl } from '../../../services';
 import { formatServerError, getRequiredEnv, getSupabase } from '../../../supabase-server';
 
 type EmailRecipient = {
@@ -38,25 +38,16 @@ const hasMailServer = async (email: string) => {
   }
 };
 
-const getAppUrl = () => {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
-  if (!configuredUrl) return '';
-  return configuredUrl.startsWith('http') ? configuredUrl : `https://${configuredUrl}`;
-};
-
 const getSurveyLink = (serviceType: string) => {
-  const baseUrl = getAppUrl().replace(/\/+$/g, '');
-  return `${baseUrl}/${serviceToSlug(serviceType)}`;
+  return withPublicSurveyUrl(`/${serviceToSlug(serviceType)}`);
 };
 
 const getMultiSurveyLink = () => {
-  const baseUrl = getAppUrl().replace(/\/+$/g, '');
-  return `${baseUrl}/multi-survey`;
+  return withPublicSurveyUrl('/multi-survey');
 };
 
 const getTrackingUrl = (path: string, blastGroupId: string) => {
-  const baseUrl = getAppUrl().replace(/\/+$/g, '');
-  return `${baseUrl}${path}?blastGroupId=${encodeURIComponent(blastGroupId)}`;
+  return `${withPublicSurveyUrl(path)}?blastGroupId=${encodeURIComponent(blastGroupId)}`;
 };
 
 const getRecipientServices = (person: EmailRecipient) => (

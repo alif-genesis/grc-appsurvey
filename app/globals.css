@@ -700,6 +700,14 @@ select {
   vertical-align: top;
 }
 
+.scale-header-note {
+  display: block;
+  margin-top: 4px;
+  color: #0f4eb8;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .scale-pill {
   display: block;
   width: max-content;
@@ -710,6 +718,14 @@ select {
   color: #0f4eb8;
   font-size: 0.76rem;
   font-weight: 800;
+}
+
+.scale-value {
+  display: block;
+  margin-top: 6px;
+  color: #0f4eb8;
+  font-size: 0.9rem;
+  font-weight: 900;
 }
 
 .single-filter-row {
@@ -807,6 +823,36 @@ select {
 
 .chart-card {
   padding-bottom: 28px;
+}
+
+.calculation-scale-panel {
+  display: flex;
+  justify-content: flex-end;
+  margin: 14px 0 6px;
+}
+
+.calculation-scale-panel label {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 320px);
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.calculation-scale-panel select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.calculation-scale-panel select:focus {
+  border-color: #0f4eb8;
+  box-shadow: 0 0 0 3px rgba(15, 78, 184, 0.12);
 }
 
 .chart-grid {

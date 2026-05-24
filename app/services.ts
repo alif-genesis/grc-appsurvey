@@ -26,6 +26,7 @@ export const serviceTypes = defaultServiceTypes;
 
 export const GENESIS_LOGO_URL = 'https://genetikasolusibisnis.co.id/wp-content/uploads/2022/09/genetika-1-warna.png';
 export const KOMDIGI_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/f/fc/Logo_Kementerian_Komunikasi_dan_Digital_Republik_Indonesia_%282024_full_version%29.svg';
+export const PUBLIC_SURVEY_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://survey.genetikasolusibisnis.co.id').replace(/\/+$/g, '');
 
 export const serviceToSlug = (service: string) =>
   service
@@ -39,6 +40,11 @@ export const withBasePath = (path: string) => {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
   if (!path.startsWith('/')) return `${basePath}/${path}`;
   return `${basePath}${path}`;
+};
+
+export const withPublicSurveyUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${PUBLIC_SURVEY_URL}${normalizedPath}`;
 };
 
 const normalizePathValue = (value: string) =>
