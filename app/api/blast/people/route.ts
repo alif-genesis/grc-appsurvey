@@ -15,6 +15,17 @@ const normalizeServices = (value: unknown) => (
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
 );
 
+const getAllowedServices = async (request: NextRequest) => {
+  const supabase = getSupabase();
+  const query = supabase
+    .from('service_catalog')
+    .select('name')
+    .eq('active', true);
+  const { data, error } = await scopeFilter(query, true, request);
+  if (error) throw error;
+  return new Set((data as Array<{ name?: string }>).map((row) => row.name).filter(Boolean));
+};
+
 const mapPersonRow = (row: BlastPersonRow) => ({
   id: row.id,
   createdAt: row.created_at,
@@ -63,6 +74,10 @@ export async function POST(request: NextRequest) {
     }
     if (serviceTypes.length === 0) {
       return NextResponse.json({ error: 'Pilih minimal satu layanan.' }, { status: 400 });
+    }
+    const allowedServices = await getAllowedServices(request);
+    if (allowedServices.size > 0 && serviceTypes.some((service) => !allowedServices.has(service))) {
+      return NextResponse.json({ error: 'Layanan user tidak sesuai dengan survey aktif.' }, { status: 400 });
     }
 
     const supabase = getSupabase();

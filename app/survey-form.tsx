@@ -58,6 +58,14 @@ const getBlastIdFromUrl = () => {
   return cookieBlastId ? decodeURIComponent(cookieBlastId) : '';
 };
 
+const hasBlastContext = () => {
+  if (typeof window === 'undefined') return false;
+  return Boolean(
+    new URLSearchParams(window.location.search).get('blastId')
+    || document.cookie.split('; ').some((cookie) => cookie.startsWith('genesis_blast_id=')),
+  );
+};
+
 export default function HomePage() {
   const [profile, setProfile] = useState({
     name: '',
@@ -119,17 +127,20 @@ export default function HomePage() {
       }
     };
 
-    checkSubmission();
-    resolveService();
+    if (hasBlastContext()) checkSubmission();
+    if (!fallbackServiceType) resolveService();
   }, []);
 
   useEffect(() => {
     if (!isDraftReady || !draftKeyRef.current || submitted || hasExistingSubmission) return;
-    saveSurveyDraft(draftKeyRef.current, {
-      profile,
-      responses,
-      comments,
-    });
+    const timer = window.setTimeout(() => {
+      saveSurveyDraft(draftKeyRef.current, {
+        profile,
+        responses,
+        comments,
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
   }, [comments, hasExistingSubmission, isDraftReady, profile, responses, submitted]);
 
   useEffect(() => {

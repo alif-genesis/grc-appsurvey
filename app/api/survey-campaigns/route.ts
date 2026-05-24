@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_SURVEY_CAMPAIGN_ID } from '../../services';
-import { formatServerError, getSupabase, getSurveyScope } from '../../supabase-server';
+import { ADMIN_SURVEY_COOKIE, formatServerError, getSupabase, getSurveyScope } from '../../supabase-server';
 
 type CampaignRow = {
   id: string;
@@ -106,6 +106,73 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: formatServerError(error, 'Gagal menambahkan survey.') },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json() as { id?: string; name?: string; description?: string };
+    const id = body.id?.trim() || '';
+    const name = body.name?.trim() || '';
+    const description = body.description?.trim() || '';
+
+    if (!id) return NextResponse.json({ error: 'Survey tidak ditemukan.' }, { status: 400 });
+    if (!name) return NextResponse.json({ error: 'Nama survey wajib diisi.' }, { status: 400 });
+    if (name.length > 180 || description.length > 500) {
+      return NextResponse.json({ error: 'Nama atau deskripsi survey terlalu panjang.' }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('survey_campaigns')
+      .update({
+        name,
+        description,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('id, created_at, updated_at, name, description, active')
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ campaign: mapCampaign(data as CampaignRow) });
+  } catch (error) {
+    return NextResponse.json(
+      { error: formatServerError(error, 'Gagal memperbarui survey.') },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const id = request.nextUrl.searchParams.get('id')?.trim() || '';
+    if (!id) return NextResponse.json({ error: 'Survey tidak ditemukan.' }, { status: 400 });
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('survey_campaigns')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    const response = NextResponse.json({ ok: true });
+    if (getSurveyScope(request) === id) {
+      response.cookies.set(ADMIN_SURVEY_COOKIE, DEFAULT_SURVEY_CAMPAIGN_ID, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: request.nextUrl.protocol === 'https:',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    }
+    return response;
+  } catch (error) {
+    return NextResponse.json(
+      { error: formatServerError(error, 'Gagal menghapus survey.') },
       { status: 500 },
     );
   }

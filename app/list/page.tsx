@@ -102,13 +102,14 @@ export default function ServiceListPage() {
     <main className="page-shell admin-shell">
       <AdminHeader
         eyebrow="Survei Kepuasan Layanan"
-        title="Layanan yang tersedia"
+        title="List Layanan"
         currentPath="/list"
         actions={[
-          { href: '/control', label: 'Control Panel', secondary: true },
-          { href: '/admin', label: 'Dashboard' },
-          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/control', label: 'Kelola Survey', secondary: true },
+          { href: '/admin', label: 'Monitoring' },
+          { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
+          { href: '/list', label: 'List Layanan' },
         ]}
       />
 

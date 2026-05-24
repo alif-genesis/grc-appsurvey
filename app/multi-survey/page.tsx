@@ -124,11 +124,14 @@ export default function MultiSurveyPage() {
 
   useEffect(() => {
     if (!isDraftReady || !draftKeyRef.current || submitted) return;
-    saveDraft(draftKeyRef.current, {
-      profile,
-      responses,
-      comments,
-    });
+    const timer = window.setTimeout(() => {
+      saveDraft(draftKeyRef.current, {
+        profile,
+        responses,
+        comments,
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
   }, [comments, isDraftReady, profile, responses, submitted]);
 
   const updateResponse = (recordId: string, questionKey: string, answer: string) => {

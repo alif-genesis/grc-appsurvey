@@ -16,17 +16,12 @@ import {
 } from '../admin/report-core';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
-const average = (values: number[]) => {
-  if (values.length === 0) return 0;
-  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
-};
-
-const getRecordAverage = (record: SurveyRecord, prefix: 'service' | 'anti', calculationScale: CalculationScale) => {
-  const questions = prefix === 'service' ? serviceQuestions : antiCorruptionQuestions;
-  const values = questions
-    .map((_, index) => answerToScale(record.responses[`${prefix}-${index + 1}`] ?? '', calculationScale))
-    .filter((value): value is number => typeof value === 'number');
-  return average(values);
+const getQualityClass = (score: number) => {
+  if (score >= 88.31) return 'quality-a';
+  if (score >= 76.61) return 'quality-b';
+  if (score >= 65) return 'quality-c';
+  if (score >= 25) return 'quality-d';
+  return 'quality-empty';
 };
 
 export default function MonitoringPage() {
@@ -34,8 +29,8 @@ export default function MonitoringPage() {
   const [loadMessage, setLoadMessage] = useState('Sinkronisasi data response...');
   const [isLoading, setIsLoading] = useState(true);
   const [availableServices, setAvailableServices] = useState(serviceTypes);
-  const [responseServiceFilter, setResponseServiceFilter] = useState('');
   const [selectedService, setSelectedService] = useState('');
+  const [responseServiceFilter, setResponseServiceFilter] = useState('');
   const [calculationScale, setCalculationScale] = useState<CalculationScale>(4);
 
   useEffect(() => {
@@ -79,14 +74,6 @@ export default function MonitoringPage() {
     loadServices();
   }, []);
 
-  const serviceAverage = useMemo(
-    () => average(records.map((record) => getRecordAverage(record, 'service', calculationScale)).filter(Boolean)),
-    [records, calculationScale],
-  );
-  const antiAverage = useMemo(
-    () => average(records.map((record) => getRecordAverage(record, 'anti', calculationScale)).filter(Boolean)),
-    [records, calculationScale],
-  );
   const skmCalculation = useMemo(
     () => getSkmCalculation(records, selectedService, calculationScale),
     [records, selectedService, calculationScale],
@@ -99,11 +86,18 @@ export default function MonitoringPage() {
     [availableServices, records],
   );
   const filteredResponseRecords = useMemo(
-    () => responseServiceFilter
-      ? records.filter((record) => record.profile.serviceType === responseServiceFilter)
-      : records,
+    () => records.filter((record) => !responseServiceFilter || record.profile.serviceType === responseServiceFilter),
     [records, responseServiceFilter],
   );
+  const downloadCalculationExcel = async () => {
+    const { downloadSkmExcel } = await import('../admin/report-utils');
+    await downloadSkmExcel(skmCalculation);
+  };
+
+  const downloadCalculationPDF = async () => {
+    const { downloadSkmPDF } = await import('../admin/report-utils');
+    await downloadSkmPDF(skmCalculation);
+  };
 
   const downloadResponseExcel = async () => {
     const { downloadMonitoringExcel } = await import('../admin/report-utils');
@@ -115,26 +109,16 @@ export default function MonitoringPage() {
     await downloadMonitoringPDF(filteredResponseRecords, calculationScale);
   };
 
-  const downloadCalculationExcel = async () => {
-    const { downloadSkmExcel } = await import('../admin/report-utils');
-    await downloadSkmExcel(skmCalculation);
-  };
-
-  const downloadCalculationPDF = async () => {
-    const { downloadSkmPDF } = await import('../admin/report-utils');
-    await downloadSkmPDF(skmCalculation);
-  };
-
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
         eyebrow="Admin Monitoring"
-        title="Monitoring Response"
+        title="Hasil Survey"
         currentPath="/monitoring"
         actions={[
-          { href: '/control', label: 'Control Panel', secondary: true },
-          { href: '/admin', label: 'Dashboard' },
-          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/control', label: 'Kelola Survey', secondary: true },
+          { href: '/admin', label: 'Monitoring' },
+          { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
         ]}
@@ -153,122 +137,6 @@ export default function MonitoringPage() {
             <option value={5}>Perhitungan Skala 5</option>
           </select>
         </label>
-      </section>
-
-      <section className="chart-grid admin-chart-grid">
-        <div className={`chart-card ${isLoading ? 'loading-card' : ''}`}>
-          <h2>Grafik Rata-rata Inputan User</h2>
-          <div className="bar-chart-grid">
-            {[
-              { label: 'Kepuasan Layanan', value: serviceAverage },
-              { label: 'Persepsi Anti Korupsi', value: antiAverage },
-            ].map((row) => (
-              <div key={row.label} className="bar-row">
-                <span>{row.label}</span>
-                <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${Math.min(100, (row.value / calculationScale) * 100)}%` }} />
-                </div>
-                <strong>{row.value || '-'} / {calculationScale}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className={`chart-card small-chart-card ${isLoading ? 'loading-card' : ''}`}>
-          <h2>Total Response</h2>
-          <div className="metric-block">
-            <div>
-              <span>Semua Response</span>
-              <strong>{records.length}</strong>
-            </div>
-            <div>
-              <span>Responden Unik</span>
-              <strong>{new Set(records.map((record) => `${record.profile.name}-${record.profile.directorate}`)).size}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="table-card">
-        <div className="section-heading-row">
-          <h2>Detail Response Seluruh Responden</h2>
-          <div className="inline-actions">
-            <button type="button" className="download-button" onClick={() => { void downloadResponseExcel(); }}>
-              Download Excel
-            </button>
-            <button type="button" className="download-button" onClick={() => { void downloadResponsePDF(); }}>
-              Download PDF
-            </button>
-          </div>
-        </div>
-        <div className="filter-row single-filter-row">
-          <label>
-            Filter Layanan
-            <select value={responseServiceFilter} onChange={(event) => setResponseServiceFilter(event.target.value)}>
-              <option value="">Seluruh Layanan</option>
-              {serviceFilterOptions.map((service) => (
-                <option key={service} value={service}>{service}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {filteredResponseRecords.length === 0 ? (
-          <p>Tidak ada data survei tersimpan.</p>
-        ) : (
-          <div className="monitoring-table-wrapper">
-            <table className="service-summary-table monitoring-table">
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Nama Lengkap</th>
-                  <th>Direktorat</th>
-                  <th>Jenis Layanan</th>
-                  {serviceQuestions.map((_, index) => (
-                    <th key={`service-head-${index}`}>
-                      Kepuasan {index + 1}
-                      <span className="scale-header-note">Skala {calculationScale}</span>
-                    </th>
-                  ))}
-                  {antiCorruptionQuestions.map((_, index) => (
-                    <th key={`anti-head-${index}`}>
-                      Anti Korupsi {index + 1}
-                      <span className="scale-header-note">Skala {calculationScale}</span>
-                    </th>
-                  ))}
-                  <th>Kritik/Saran</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredResponseRecords.map((record) => (
-                  <tr key={record.id}>
-                    <td>{new Date(record.createdAt).toLocaleString('id-ID')}</td>
-                    <td>{record.profile.name || '-'}</td>
-                    <td>{record.profile.directorate || '-'}</td>
-                    <td>{record.profile.serviceType || '-'}</td>
-                    {serviceQuestions.map((_, index) => {
-                      const answer = record.responses[`service-${index + 1}`] ?? '';
-                      return (
-                        <td key={`service-${record.id}-${index}`}>
-                          {answer || '-'}
-                          <span className="scale-value">{answerToScale(answer, calculationScale) || '-'}</span>
-                        </td>
-                      );
-                    })}
-                    {antiCorruptionQuestions.map((_, index) => {
-                      const answer = record.responses[`anti-${index + 1}`] ?? '';
-                      return (
-                        <td key={`anti-${record.id}-${index}`}>
-                          {answer || '-'}
-                          <span className="scale-value">{answerToScale(answer, calculationScale) || '-'}</span>
-                        </td>
-                      );
-                    })}
-                    <td>{record.comments || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
 
       <section className="table-card">
@@ -300,7 +168,7 @@ export default function MonitoringPage() {
           <div className="skm-score-card">
             <span>SKM Unit Pelayanan</span>
             <small>{getServiceQuality(skmCalculation.serviceSkm100)}</small>
-            <div className="skm-score-value">
+            <div className={`skm-score-value ${getQualityClass(skmCalculation.serviceSkm100)}`}>
               <strong>{skmCalculation.serviceSkm100 || '-'}</strong>
               <em>Skala {calculationScale}: {skmCalculation.serviceSkmScale || '-'}</em>
             </div>
@@ -308,7 +176,7 @@ export default function MonitoringPage() {
           <div className="skm-score-card">
             <span>Indeks Persepsi Anti Korupsi</span>
             <small>{getServiceQuality(skmCalculation.antiSkm100)}</small>
-            <div className="skm-score-value">
+            <div className={`skm-score-value ${getQualityClass(skmCalculation.antiSkm100)}`}>
               <strong>{skmCalculation.antiSkm100 || '-'}</strong>
               <em>Skala {calculationScale}: {skmCalculation.antiSkmScale || '-'}</em>
             </div>
@@ -393,26 +261,84 @@ export default function MonitoringPage() {
       </section>
 
       <section className="table-card">
-        <h2>Respon Terakhir</h2>
-        {records.length === 0 ? (
+        <div className="section-heading-row">
+          <h2>Detail Response Seluruh Responden</h2>
+          <div className="inline-actions">
+            <button type="button" className="download-button" onClick={() => { void downloadResponseExcel(); }}>
+              Download Excel
+            </button>
+            <button type="button" className="download-button" onClick={() => { void downloadResponsePDF(); }}>
+              Download PDF
+            </button>
+          </div>
+        </div>
+        <div className="filter-row single-filter-row">
+          <label>
+            Filter Layanan
+            <select value={responseServiceFilter} onChange={(event) => setResponseServiceFilter(event.target.value)}>
+              <option value="">Seluruh Layanan</option>
+              {serviceFilterOptions.map((service) => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {filteredResponseRecords.length === 0 ? (
           <p>Tidak ada data survei tersimpan.</p>
         ) : (
-          <div className="record-list">
-            {records.slice(0, 5).map((record) => (
-              <div key={record.id} className="record-item">
-                <div className="record-header">
-                  <div>
-                    <strong>{record.profile.name || 'Tanpa Nama'}</strong>
-                    <small>{record.profile.directorate || 'Direktorat belum dipilih'}</small>
-                  </div>
-                  <time>{new Date(record.createdAt).toLocaleString('id-ID')}</time>
-                </div>
-                <div className="record-meta">
-                  <span>{record.profile.serviceType || 'Layanan belum dipilih'}</span>
-                </div>
-                <p>{record.comments || 'Tidak ada catatan.'}</p>
-              </div>
-            ))}
+          <div className="monitoring-table-wrapper">
+            <table className="service-summary-table monitoring-table">
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Nama Lengkap</th>
+                  <th>Direktorat</th>
+                  <th>Jenis Layanan</th>
+                  {serviceQuestions.map((_, index) => (
+                    <th key={`service-head-${index}`}>
+                      Kepuasan {index + 1}
+                      <span className="scale-header-note">Skala {calculationScale}</span>
+                    </th>
+                  ))}
+                  {antiCorruptionQuestions.map((_, index) => (
+                    <th key={`anti-head-${index}`}>
+                      Anti Korupsi {index + 1}
+                      <span className="scale-header-note">Skala {calculationScale}</span>
+                    </th>
+                  ))}
+                  <th>Kritik/Saran</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredResponseRecords.map((record) => (
+                  <tr key={record.id}>
+                    <td>{new Date(record.createdAt).toLocaleString('id-ID')}</td>
+                    <td>{record.profile.name || '-'}</td>
+                    <td>{record.profile.directorate || '-'}</td>
+                    <td>{record.profile.serviceType || '-'}</td>
+                    {serviceQuestions.map((_, index) => {
+                      const answer = record.responses[`service-${index + 1}`] ?? '';
+                      return (
+                        <td key={`service-${record.id}-${index}`}>
+                          {answer || '-'}
+                          <span className="scale-value">{answerToScale(answer, calculationScale) || '-'}</span>
+                        </td>
+                      );
+                    })}
+                    {antiCorruptionQuestions.map((_, index) => {
+                      const answer = record.responses[`anti-${index + 1}`] ?? '';
+                      return (
+                        <td key={`anti-${record.id}-${index}`}>
+                          {answer || '-'}
+                          <span className="scale-value">{answerToScale(answer, calculationScale) || '-'}</span>
+                        </td>
+                      );
+                    })}
+                    <td>{record.comments || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

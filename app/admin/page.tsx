@@ -9,9 +9,29 @@ import {
 } from './report-core';
 import { AdminFooter, AdminHeader } from './admin-chrome';
 
+type BlastPerson = {
+  id: string;
+  name: string;
+  whatsapp: string;
+  email: string;
+  serviceTypes: string[];
+};
+
+type BlastHistory = {
+  personName: string;
+  email: string;
+  serviceType: string;
+  submittedAt?: string | null;
+};
+
+const normalizeKey = (value: string) => value.trim().toLowerCase();
+
 export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
+  const [people, setPeople] = useState<BlastPerson[]>([]);
+  const [history, setHistory] = useState<BlastHistory[]>([]);
   const [availableServices, setAvailableServices] = useState(serviceTypes);
+  const [selectedService, setSelectedService] = useState('');
   const [loadMessage, setLoadMessage] = useState('Sinkronisasi data survey...');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -40,6 +60,24 @@ export default function AdminPage() {
 
     loadRecords();
 
+    const loadTargets = async () => {
+      try {
+        const [peopleResponse, historyResponse] = await Promise.all([
+          fetch(withBasePath('/api/blast/people'), { cache: 'no-store' }),
+          fetch(withBasePath('/api/blast/history'), { cache: 'no-store' }),
+        ]);
+        const peoplePayload = await peopleResponse.json() as { people?: BlastPerson[] };
+        const historyPayload = await historyResponse.json() as { records?: BlastHistory[] };
+        if (peopleResponse.ok) setPeople(peoplePayload.people ?? []);
+        if (historyResponse.ok) setHistory(historyPayload.records ?? []);
+      } catch {
+        setPeople([]);
+        setHistory([]);
+      }
+    };
+
+    loadTargets();
+
     const loadServices = async () => {
       try {
         const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
@@ -54,42 +92,97 @@ export default function AdminPage() {
     loadServices();
   }, []);
 
-  const summary = useMemo(() => getSurveySummary(records, availableServices), [availableServices, records]);
+  const servicePopulationCounts = useMemo(() => people.reduce<Record<string, number>>((acc, person) => {
+    person.serviceTypes.forEach((service) => {
+      acc[service] = (acc[service] ?? 0) + 1;
+    });
+    return acc;
+  }, {}), [people]);
+  const summary = useMemo(
+    () => getSurveySummary(records, availableServices, servicePopulationCounts),
+    [availableServices, records, servicePopulationCounts],
+  );
+  const serviceRanking = useMemo(() => (
+    [...summary.serviceSummary].sort((left, right) => (
+      right.percent - left.percent
+      || right.responded - left.responded
+      || left.name.localeCompare(right.name)
+    ))
+  ), [summary.serviceSummary]);
+  const selectedServiceRows = useMemo(() => {
+    if (!selectedService) return [];
+
+    const submittedEmails = new Set(history
+      .filter((row) => row.serviceType === selectedService && row.submittedAt)
+      .map((row) => normalizeKey(row.email)));
+    const submittedNames = new Set([
+      ...history
+        .filter((row) => row.serviceType === selectedService && row.submittedAt)
+        .map((row) => normalizeKey(row.personName)),
+      ...records
+        .filter((record) => record.profile.serviceType === selectedService)
+        .map((record) => normalizeKey(record.profile.name)),
+    ]);
+    const targetPeople = people.filter((person) => person.serviceTypes.includes(selectedService));
+
+    if (targetPeople.length > 0) {
+      return targetPeople.map((person) => {
+        const submitted = submittedEmails.has(normalizeKey(person.email)) || submittedNames.has(normalizeKey(person.name));
+        return {
+          id: person.id,
+          name: person.name,
+          email: person.email,
+          whatsapp: person.whatsapp,
+          status: submitted ? 'Sudah isi' : 'Belum isi',
+        };
+      });
+    }
+
+    return records
+      .filter((record) => record.profile.serviceType === selectedService)
+      .map((record) => ({
+        id: record.id,
+        name: record.profile.name,
+        email: '-',
+        whatsapp: '-',
+        status: 'Sudah isi',
+      }));
+  }, [history, people, records, selectedService]);
 
   const downloadSummaryExcel = async () => {
     const { downloadAdminSummaryExcel } = await import('./report-utils');
-    await downloadAdminSummaryExcel(records, availableServices);
+    await downloadAdminSummaryExcel(records, availableServices, servicePopulationCounts);
   };
 
   const downloadSummaryPDF = async () => {
     const { downloadAdminSummaryPDF } = await import('./report-utils');
-    await downloadAdminSummaryPDF(records, availableServices);
+    await downloadAdminSummaryPDF(records, availableServices, servicePopulationCounts);
   };
 
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
-        eyebrow="Admin Dashboard"
-        title="Data Survei"
+        eyebrow="Admin Monitoring"
+        title="Monitoring"
         currentPath="/admin"
         actions={[
-          { href: '/control', label: 'Control Panel', secondary: true },
-          { href: '/admin', label: 'Dashboard' },
-          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/control', label: 'Kelola Survey', secondary: true },
+          { href: '/admin', label: 'Monitoring' },
+          { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
         ]}
       />
       {loadMessage && <p className={`admin-data-message ${isLoading ? 'is-loading' : ''}`}>{loadMessage}</p>}
 
-      <section className="dashboard-grid">
+      <section className="dashboard-grid compact-dashboard-grid">
         <div className={`summary-card ${isLoading ? 'loading-card' : ''}`}>
-          <h2>Total Survei</h2>
-          <p>{summary.totalSurveys}</p>
+          <h2>Total Responden</h2>
+          <p>{people.length}</p>
         </div>
         <div className={`summary-card ${isLoading ? 'loading-card' : ''}`}>
-          <h2>Responden Unik</h2>
-          <p>{summary.uniqueRespondents}</p>
+          <h2>Total Layanan</h2>
+          <p>{availableServices.length}</p>
         </div>
         <div className={`summary-card wide-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Progress Keseluruhan</h2>
@@ -105,37 +198,20 @@ export default function AdminPage() {
         </div>
       </section>
 
-      <section className="chart-grid admin-chart-grid">
-        <div className="chart-card">
-          <h2>Persentase Pemenuhan Target</h2>
-          <div className="bar-chart-grid">
-            {summary.serviceSummary.map((row) => (
-              <div key={row.name} className="bar-row">
-                <span>{row.name}</span>
-                <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${Math.min(100, row.percent)}%` }} />
-                </div>
-                <strong>{row.percent}%</strong>
-              </div>
-            ))}
-          </div>
+      <section className="table-card">
+        <div className="section-heading-row">
+          <h2>Pemenuhan Survey</h2>
         </div>
-        <div className="chart-card small-chart-card">
-          <h2>Target vs Isi</h2>
-          <div className="metric-block">
-            <div>
-              <span>Total Target</span>
-              <strong>{summary.overallTarget}</strong>
+        <div className="ranking-bar-list">
+          {serviceRanking.map((row) => (
+            <div className="ranking-bar-row" key={`rank-${row.name}`}>
+              <span>{row.name}</span>
+              <div className="ranking-bar-track">
+                <div className="ranking-bar-fill" style={{ width: `${Math.min(100, row.percent)}%` }} />
+              </div>
+              <strong>{row.percent}%</strong>
             </div>
-            <div>
-              <span>Total Respon</span>
-              <strong>{summary.overallResponded}</strong>
-            </div>
-            <div>
-              <span>Rata-rata Persen</span>
-              <strong>{summary.overallPercent}%</strong>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
@@ -164,6 +240,7 @@ export default function AdminPage() {
             <thead>
               <tr>
                 <th>Nama Layanan</th>
+                <th>Jumlah Responden</th>
                 <th>Target</th>
                 <th>Respon</th>
                 <th>GAP</th>
@@ -172,8 +249,17 @@ export default function AdminPage() {
             </thead>
             <tbody>
               {summary.serviceSummary.map((row) => (
-                <tr key={row.name}>
-                  <td>{row.name}</td>
+                <tr key={row.name} className={selectedService === row.name ? 'selected-summary-row' : ''}>
+                  <td>
+                    <button
+                      type="button"
+                      className="service-summary-button"
+                      onClick={() => setSelectedService((current) => (current === row.name ? '' : row.name))}
+                    >
+                      {row.name}
+                    </button>
+                  </td>
+                  <td>{row.population}</td>
                   <td>{row.target}</td>
                   <td>{row.responded}</td>
                   <td>{row.gap}</td>
@@ -183,6 +269,76 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {selectedService && (
+        <section className="table-card">
+          <div className="section-heading-row">
+            <div>
+              <h2>Monitoring Pengisian Layanan</h2>
+              <span>{selectedService}</span>
+            </div>
+            <button type="button" className="text-button" onClick={() => setSelectedService('')}>
+              Tutup
+            </button>
+          </div>
+          <div className="service-summary-table-wrapper">
+            <table className="service-summary-table">
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Email</th>
+                  <th>WhatsApp</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedServiceRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    <td>{row.email || '-'}</td>
+                    <td>{row.whatsapp || '-'}</td>
+                    <td>
+                      <span className={`status-pill ${row.status === 'Sudah isi' ? 'done-pill' : 'pending-pill'}`}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {selectedServiceRows.length === 0 && (
+                  <tr>
+                    <td colSpan={4}>Belum ada target user atau response untuk layanan ini.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section className="table-card">
+        <h2>Respon Terakhir</h2>
+        {records.length === 0 ? (
+          <p>Tidak ada data survei tersimpan.</p>
+        ) : (
+          <div className="record-list">
+            {records.slice(0, 5).map((record) => (
+              <div key={record.id} className="record-item">
+                <div className="record-header">
+                  <div>
+                    <strong>{record.profile.name || 'Tanpa Nama'}</strong>
+                    <small>{record.profile.directorate || 'Direktorat belum dipilih'}</small>
+                  </div>
+                  <time>{new Date(record.createdAt).toLocaleString('id-ID')}</time>
+                </div>
+                <div className="record-meta">
+                  <span>{record.profile.serviceType || 'Layanan belum dipilih'}</span>
+                </div>
+                <p>{record.comments || 'Tidak ada catatan.'}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <AdminFooter />

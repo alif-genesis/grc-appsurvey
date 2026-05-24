@@ -1,8 +1,6 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { readSheet } from 'read-excel-file/browser';
-import writeXlsxFile from 'write-excel-file/browser';
 import { serviceToSlug, serviceTypes, withBasePath, withPublicSurveyUrl } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
@@ -46,24 +44,14 @@ const EMAIL_BATCH_DELAY_MS = 3000;
 const WHATSAPP_BATCH_SIZE = 5;
 const WHATSAPP_BATCH_DELAY_MS = 3000;
 
-const emptyPerson = {
+const createEmptyPerson = (services: string[] = []) => ({
   name: '',
   whatsapp: '',
   email: '',
-  serviceTypes: serviceTypes[0] ? [serviceTypes[0]] : [],
-};
+  serviceTypes: services[0] ? [services[0]] : [],
+});
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const loadFromStorage = <T,>(key: string, fallback: T): T => {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const stored = window.localStorage.getItem(key);
-    return stored ? JSON.parse(stored) as T : fallback;
-  } catch {
-    return fallback;
-  }
-};
 
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -136,7 +124,7 @@ const getImportValue = (row: Record<string, unknown>, aliases: string[]) => {
   return match ? String(match[1] ?? '').trim() : '';
 };
 
-const parseImportServices = (row: Record<string, unknown>) => {
+const parseImportServices = (row: Record<string, unknown>, services: string[]) => {
   const serviceAliases = new Set(['layanan', 'jenislayanan', 'service', 'servicetype'].map(normalizeColumnName));
   const serviceSource = Object.entries(row)
     .filter(([key]) => serviceAliases.has(normalizeColumnName(key)))
@@ -146,7 +134,7 @@ const parseImportServices = (row: Record<string, unknown>) => {
 
   Object.entries(row).forEach(([key, value]) => {
     const normalizedKey = normalizeServiceName(key);
-    const serviceFromHeader = serviceTypes.find((service) => (
+    const serviceFromHeader = services.find((service) => (
       normalizeServiceName(service) === normalizedKey || serviceToSlug(service) === key.trim().toLowerCase()
     ));
     const isChecked = ['1', 'yes', 'ya', 'true', 'x', 'v'].includes(String(value ?? '').trim().toLowerCase());
@@ -157,7 +145,7 @@ const parseImportServices = (row: Record<string, unknown>) => {
   });
 
   return Array.from(new Set(serviceCandidates.map((candidate) => (
-    serviceTypes.find((service) => (
+    services.find((service) => (
       normalizeServiceName(service) === normalizeServiceName(candidate)
       || serviceToSlug(service) === candidate.toLowerCase().trim()
     ))
@@ -169,7 +157,7 @@ export default function BlastingPage() {
   const [availableServices, setAvailableServices] = useState(serviceTypes);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
-  const [newPerson, setNewPerson] = useState(emptyPerson);
+  const [newPerson, setNewPerson] = useState(createEmptyPerson(serviceTypes));
   const [editDrafts, setEditDrafts] = useState<Record<string, BlastPersonDraft>>({});
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<ImportPerson[]>([]);
@@ -199,9 +187,19 @@ export default function BlastingPage() {
       const names = payload.services?.map((service) => service.name).filter(Boolean);
       if (names) {
         setAvailableServices(names);
+        setPeople((current) => current
+          .map((person) => ({
+            ...person,
+            serviceTypes: getPersonServices(person).filter((service) => names.includes(service)),
+          }))
+          .filter((person) => person.serviceTypes.length > 0));
+        setPeopleServiceFilter((current) => (current && !names.includes(current) ? '' : current));
+        setHistoryServiceFilter((current) => (current && !names.includes(current) ? '' : current));
         setNewPerson((current) => ({
           ...current,
-          serviceTypes: current.serviceTypes.length ? current.serviceTypes : names[0] ? [names[0]] : [],
+          serviceTypes: current.serviceTypes.filter((service) => names.includes(service)).length
+            ? current.serviceTypes.filter((service) => names.includes(service))
+            : names[0] ? [names[0]] : [],
         }));
       }
     } catch {
@@ -283,28 +281,8 @@ export default function BlastingPage() {
 
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar orang.');
 
-      let loadedPeople = payload.people ?? [];
-      const storedPeople = loadFromStorage<BlastPerson[]>(PEOPLE_STORAGE_KEY, []);
-
-      if (loadedPeople.length === 0 && storedPeople.length > 0) {
-        const migratedPeople = await Promise.all(storedPeople.map(async (person) => {
-          const migrationResponse = await fetch(withBasePath('/api/blast/people'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: person.name,
-              whatsapp: person.whatsapp,
-              email: person.email,
-              serviceTypes: getPersonServices(person),
-            }),
-          });
-          if (!migrationResponse.ok) return null;
-          const migrationPayload = await migrationResponse.json() as { person?: BlastPerson };
-          return migrationPayload.person ?? null;
-        }));
-        loadedPeople = migratedPeople.filter((person): person is BlastPerson => Boolean(person));
-        window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
-      }
+      const loadedPeople = payload.people ?? [];
+      window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
 
       setPeople(loadedPeople);
       setSelectedPersonIds(loadedPeople.map((person) => person.id));
@@ -331,7 +309,7 @@ export default function BlastingPage() {
 
       setPeople((current) => [payload.person as BlastPerson, ...current]);
       setSelectedPersonIds((current) => [payload.person!.id, ...current]);
-      setNewPerson(emptyPerson);
+      setNewPerson(createEmptyPerson(availableServices));
       setBlastNotice('User berhasil ditambahkan ke Supabase.');
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal menambahkan orang.');
@@ -345,7 +323,8 @@ export default function BlastingPage() {
     setImportMessage('');
 
     try {
-      const excelRows = await readSheet(file);
+      const { default: readSheet } = await import('read-excel-file/browser');
+      const excelRows = (await readSheet(file) as unknown) as unknown[][];
       const headers = (excelRows[0] ?? []).map((cell) => String(cell ?? '').trim());
       const rows = excelRows.slice(1).map((cells) => headers.reduce<Record<string, unknown>>((acc, header, index) => {
         acc[header] = cells[index] ?? '';
@@ -356,7 +335,7 @@ export default function BlastingPage() {
         name: getImportValue(row, ['nama', 'name', 'nama lengkap', 'namalengkap']),
         whatsapp: getImportValue(row, ['whatsapp', 'wa', 'no whatsapp', 'nowhatsapp', 'nomor whatsapp', 'phone', 'telepon']),
         email: getImportValue(row, ['email', 'alamat email', 'alamatemail', 'e-mail']),
-        serviceTypes: parseImportServices(row),
+        serviceTypes: parseImportServices(row, availableServices),
       })).filter((row) => row.name && row.serviceTypes.length > 0);
 
       setImportRows(parsedRows);
@@ -406,17 +385,18 @@ export default function BlastingPage() {
   };
 
   const downloadImportTemplate = async () => {
+    const { default: writeXlsxFile } = await import('write-excel-file/browser');
     const rows = [
       {
-        Nama: 'Alif Brazali',
-        WhatsApp: '085695763976',
-        Email: 'alif@example.com',
+        Nama: 'Nama Responden 1',
+        WhatsApp: '081234567890',
+        Email: 'responden1@example.com',
         Layanan: availableServices.slice(0, 2).join(', '),
       },
       {
-        Nama: 'Anne',
-        WhatsApp: '085695763976',
-        Email: 'anne@example.com',
+        Nama: 'Nama Responden 2',
+        WhatsApp: '081234567891',
+        Email: 'responden2@example.com',
         Layanan: availableServices[0] || '',
       },
     ];
@@ -688,46 +668,23 @@ export default function BlastingPage() {
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
-        eyebrow="Admin Dashboard"
+        eyebrow="Admin"
         title="Blasting"
         currentPath="/blasting"
         actions={[
-          { href: '/control', label: 'Control Panel', secondary: true },
-          { href: '/admin', label: 'Dashboard' },
-          { href: '/monitoring', label: 'Monitoring' },
+          { href: '/control', label: 'Kelola Survey', secondary: true },
+          { href: '/admin', label: 'Monitoring' },
+          { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
         ]}
       />
 
-      <section className="blast-action-grid">
-        <button
-          type="button"
-          className="blast-action-card"
-          onClick={startEmailBlast}
-          disabled={
-            isEmailBlasting
-            || blastTargets.every((person) => !person.email.trim())
-          }
-        >
-          <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
-          <small>{blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch {MAX_EMAIL_RECIPIENTS} orang</small>
-        </button>
-        <button
-          type="button"
-          className="blast-action-card"
-          onClick={startWhatsAppBlast}
-          disabled={isWhatsAppBlasting || blastTargets.every((person) => normalizeWhatsAppNumber(person.whatsapp).length < 10)}
-        >
-          <span>{isWhatsAppBlasting ? 'Membuka WhatsApp...' : 'Start Blast WhatsApp'}</span>
-          <small>{blastTargets.filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10).length} penerima siap, batch {WHATSAPP_BATCH_SIZE} orang</small>
-        </button>
-      </section>
       {blastNotice && <p className="blast-notice">{blastNotice}</p>}
 
       <section className="table-card blast-section">
         <div className="section-heading-row">
-          <h2>User Management</h2>
+          <h2>Daftar Responden</h2>
           <div className="inline-actions">
             <span>{isPeopleLoading ? 'Memuat user...' : `${selectedReadyPeople.length} dipilih dari ${people.length} orang`}</span>
             <button type="button" className="text-button" onClick={() => setIsImportOpen(true)}>
@@ -762,7 +719,7 @@ export default function BlastingPage() {
             <input
               value={newPerson.name}
               onChange={(event) => setNewPerson((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Alif"
+              placeholder="Nama responden"
               required
             />
           </label>
@@ -771,7 +728,7 @@ export default function BlastingPage() {
             <input
               value={newPerson.whatsapp}
               onChange={(event) => setNewPerson((current) => ({ ...current, whatsapp: event.target.value }))}
-              placeholder="085695763976"
+              placeholder="081234567890"
             />
           </label>
           <label>
@@ -780,7 +737,7 @@ export default function BlastingPage() {
               type="email"
               value={newPerson.email}
               onChange={(event) => setNewPerson((current) => ({ ...current, email: event.target.value }))}
-              placeholder="nama@email.com"
+              placeholder="responden@example.com"
             />
           </label>
           <label>
@@ -931,6 +888,30 @@ export default function BlastingPage() {
         )}
       </section>
 
+      <section className="blast-action-grid">
+        <button
+          type="button"
+          className="blast-action-card"
+          onClick={startEmailBlast}
+          disabled={
+            isEmailBlasting
+            || blastTargets.every((person) => !person.email.trim())
+          }
+        >
+          <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
+          <small>{blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch {MAX_EMAIL_RECIPIENTS} orang</small>
+        </button>
+        <button
+          type="button"
+          className="blast-action-card"
+          onClick={startWhatsAppBlast}
+          disabled={isWhatsAppBlasting || blastTargets.every((person) => normalizeWhatsAppNumber(person.whatsapp).length < 10)}
+        >
+          <span>{isWhatsAppBlasting ? 'Membuka WhatsApp...' : 'Start Blast WhatsApp'}</span>
+          <small>{blastTargets.filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10).length} penerima siap, batch {WHATSAPP_BATCH_SIZE} orang</small>
+        </button>
+      </section>
+
       <section className="table-card blast-section">
         <div className="section-heading-row">
           <h2>Riwayat Blast</h2>
@@ -1026,7 +1007,7 @@ export default function BlastingPage() {
           <div className="import-modal">
             <div className="section-heading-row">
               <div>
-                <p className="agency">User Management</p>
+                <p className="agency">Daftar Responden</p>
                 <h2 id="import-title">Import Excel</h2>
               </div>
               <button

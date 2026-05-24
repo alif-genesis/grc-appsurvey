@@ -58,9 +58,10 @@ const buildSummarySheet = (summary: ReturnType<typeof getSurveySummary>): Row[] 
   [cell('Persentase Keseluruhan', true), `${summary.overallPercent}%`],
   [],
   [cell('Summary Survey Pengisian Layanan Sekretariat', true)],
-  [cell('Nama Layanan', true), cell('Target', true), cell('Respon', true), cell('GAP', true), cell('Persentase', true)],
+  [cell('Nama Layanan', true), cell('Jumlah Responden', true), cell('Target', true), cell('Respon', true), cell('GAP', true), cell('Persentase', true)],
   ...summary.serviceSummary.map((row) => [
     row.name,
+    row.population,
     row.target,
     row.responded,
     row.gap,
@@ -107,8 +108,12 @@ const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: Calcula
   ];
 };
 
-export const downloadAdminSummaryExcel = async (records: SurveyRecord[], availableServices = serviceTypes) => {
-  const summary = getSurveySummary(records, availableServices);
+export const downloadAdminSummaryExcel = async (
+  records: SurveyRecord[],
+  availableServices = serviceTypes,
+  populationCounts: Record<string, number> = {},
+) => {
+  const summary = getSurveySummary(records, availableServices, populationCounts);
   const sheets: Sheet<Blob>[] = [{
     sheet: 'Summary',
     data: buildSummarySheet(summary),
@@ -323,8 +328,12 @@ const drawAverageChart = (
   });
 };
 
-export const downloadAdminSummaryPDF = async (records: SurveyRecord[], availableServices = serviceTypes) => {
-  const summary = getSurveySummary(records, availableServices);
+export const downloadAdminSummaryPDF = async (
+  records: SurveyRecord[],
+  availableServices = serviceTypes,
+  populationCounts: Record<string, number> = {},
+) => {
+  const summary = getSurveySummary(records, availableServices, populationCounts);
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   await addGenesisLogo(doc);
@@ -338,8 +347,8 @@ export const downloadAdminSummaryPDF = async (records: SurveyRecord[], available
 
   autoTable(doc, {
     startY: 280,
-    head: [['Nama Layanan', 'Target', 'Respon', 'GAP', 'Persentase']],
-    body: summary.serviceSummary.map((row) => [row.name, row.target, row.responded, row.gap, `${row.percent}%`]),
+    head: [['Nama Layanan', 'Jumlah Responden', 'Target', 'Respon', 'GAP', 'Persentase']],
+    body: summary.serviceSummary.map((row) => [row.name, row.population, row.target, row.responded, row.gap, `${row.percent}%`]),
     styles: { fontSize: 8, cellPadding: 4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
     margin: { left: 40, right: 40 },

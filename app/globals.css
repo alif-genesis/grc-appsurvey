@@ -273,9 +273,9 @@ select {
 }
 
 .admin-topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.4fr);
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
   margin-bottom: 22px;
   padding: 18px;
@@ -317,7 +317,7 @@ select {
 .admin-title-row h1 {
   margin: 0;
   color: #0f172a;
-  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-size: clamp(1.8rem, 3.2vw, 3rem);
   line-height: 1.05;
 }
 
@@ -339,6 +339,7 @@ select {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+  min-width: 0;
 }
 
 .admin-link,
@@ -366,22 +367,11 @@ select {
   background: #334155;
 }
 
-.control-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 20px;
-  padding: 24px;
-  border: 1px solid rgba(15, 78, 184, 0.12);
-  border-radius: 22px;
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, 0.92), rgba(240, 253, 250, 0.88)),
-    #ffffff;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+.active-admin-link {
+  outline: 3px solid rgba(15, 78, 184, 0.18);
+  background: #0f766e;
 }
 
-.control-hero p,
 .control-create-panel p,
 .section-kicker {
   margin: 0 0 6px;
@@ -390,17 +380,6 @@ select {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.control-hero h2 {
-  margin: 0 0 8px;
-  color: #0f172a;
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
-}
-
-.control-hero span {
-  color: #475569;
-  font-weight: 650;
 }
 
 .control-grid {
@@ -500,6 +479,19 @@ select {
   background: #fbfdff;
 }
 
+.campaign-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.campaign-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .campaign-card.is-active {
   border-color: #7dd3fc;
   background: #f0f9ff;
@@ -532,6 +524,32 @@ select {
   margin: 6px 0 0;
   color: #475569;
   font-weight: 650;
+}
+
+.campaign-edit-input,
+.campaign-edit-textarea {
+  width: min(100%, 560px);
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 750;
+  outline: none;
+}
+
+.campaign-edit-textarea {
+  min-height: 82px;
+  margin-top: 10px;
+  resize: vertical;
+  font-weight: 650;
+}
+
+.campaign-edit-input:focus,
+.campaign-edit-textarea:focus {
+  border-color: #0f4eb8;
+  box-shadow: 0 0 0 4px rgba(15, 78, 184, 0.1);
 }
 
 .login-shell {
@@ -619,7 +637,7 @@ select {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 18px 0 0;
+  padding: 0;
 }
 
 .gauge-ring {
@@ -716,6 +734,7 @@ select {
 
 .small-chart-card .metric-block {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -754,8 +773,12 @@ select {
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  margin-bottom: 24px;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.compact-dashboard-grid {
+  grid-template-columns: minmax(180px, 0.55fr) minmax(180px, 0.55fr) minmax(340px, 1.3fr);
 }
 
 .admin-kpi-grid {
@@ -774,6 +797,27 @@ select {
   padding: 22px;
 }
 
+.table-card {
+  margin-bottom: 30px;
+}
+
+.table-card:last-of-type {
+  margin-bottom: 0;
+}
+
+.summary-card {
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.82), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+}
+
+.summary-card.wide-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
 .summary-card h2,
 .table-card h2 {
   margin-top: 0;
@@ -783,7 +827,7 @@ select {
 
 .summary-card p {
   font-size: 2rem;
-  margin: 18px 0 0;
+  margin: 14px 0 0;
   color: #0f4eb8;
   font-weight: 800;
 }
@@ -811,10 +855,6 @@ select {
   100% {
     transform: translateX(100%);
   }
-}
-
-.summary-card.wide-card {
-  grid-column: span 3;
 }
 
 .table-card p {
@@ -859,6 +899,69 @@ select {
   background: #e8f0ff;
   color: #0f172a;
   font-weight: 700;
+}
+
+.selected-summary-row td {
+  background: #f0f9ff;
+}
+
+.service-summary-button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.service-summary-button:hover {
+  color: #0f4eb8;
+}
+
+.ranking-bar-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ranking-bar-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(180px, 1.2fr) 56px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ranking-bar-row:last-child {
+  border-bottom: 0;
+}
+
+.ranking-bar-row span {
+  color: #0f172a;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.ranking-bar-row strong {
+  color: #0f4eb8;
+  font-weight: 900;
+}
+
+.ranking-bar-track {
+  width: 100%;
+  height: 16px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.ranking-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f4eb8, #0f766e);
 }
 
 .monitoring-table-wrapper {
@@ -946,6 +1049,27 @@ select {
   border-radius: 10px;
   background: #94d34f;
   color: #0f172a;
+}
+
+.skm-score-value.quality-a {
+  background: #22c55e;
+  color: #052e16;
+}
+
+.skm-score-value.quality-b {
+  background: #86efac;
+  color: #14532d;
+}
+
+.skm-score-value.quality-c {
+  background: #facc15;
+  color: #422006;
+}
+
+.skm-score-value.quality-d,
+.skm-score-value.quality-empty {
+  background: #fecaca;
+  color: #7f1d1d;
 }
 
 .skm-score-value strong {
@@ -1637,8 +1761,13 @@ select {
 }
 
 .done-pill {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pending-pill {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 @media (max-width: 1080px) {
@@ -1649,11 +1778,16 @@ select {
 
   .admin-topbar {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .admin-nav {
     justify-content: flex-start;
+  }
+
+  .compact-dashboard-grid,
+  .ranking-bar-row {
+    grid-template-columns: 1fr;
   }
 
   .blast-action-grid,
@@ -2089,7 +2223,6 @@ select {
     border-radius: 12px;
   }
 
-  .control-hero,
   .campaign-card {
     flex-direction: column;
     align-items: stretch;
@@ -2100,8 +2233,7 @@ select {
   }
 
   .control-create-panel,
-  .control-list-panel,
-  .control-hero {
+  .control-list-panel {
     border-radius: 16px;
     padding: 16px;
   }

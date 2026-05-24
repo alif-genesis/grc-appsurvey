@@ -13,8 +13,6 @@ type AdminChromeProps = {
 };
 
 export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/admin', actions = [] }: AdminChromeProps) {
-  const visibleActions = actions.filter((action) => action.href !== currentPath);
-
   return (
     <header className="admin-topbar">
       <div className="admin-title-row">
@@ -28,7 +26,7 @@ export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/adm
       </div>
 
       <nav className="admin-nav" aria-label="Navigasi admin">
-        {visibleActions.map((action) => (
+        {actions.map((action) => (
           <a
             key={action.href}
             className={action.secondary ? 'admin-link secondary-admin-link' : 'admin-link'}

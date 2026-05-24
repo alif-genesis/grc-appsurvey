@@ -12,6 +12,31 @@ export type { SurveyRecord } from '../survey-utils';
 
 export const serviceTargets = serviceTypes.map((name) => ({ name, target: 10 }));
 
+const sampleSizeTable = [
+  [10, 10], [15, 14], [20, 19], [25, 24], [30, 28], [35, 32], [40, 36], [45, 40],
+  [50, 44], [55, 48], [60, 52], [65, 56], [70, 59], [75, 63], [80, 66], [85, 70],
+  [90, 73], [95, 76], [100, 80], [110, 86], [120, 92], [130, 97], [140, 103],
+  [150, 108], [160, 113], [170, 118], [180, 123], [190, 127], [200, 132],
+  [210, 136], [220, 140], [230, 144], [240, 148], [250, 152], [260, 155],
+  [270, 159], [280, 162], [290, 165], [300, 169], [320, 175], [340, 181],
+  [360, 186], [380, 191], [400, 196], [420, 201], [440, 205], [460, 210],
+  [480, 214], [500, 217], [550, 226], [600, 234], [650, 242], [700, 248],
+  [750, 254], [800, 260], [850, 265], [900, 269], [950, 274], [1000, 278],
+  [1100, 285], [1200, 291], [1300, 297], [1400, 302], [1500, 306], [1600, 310],
+  [1700, 313], [1800, 317], [1900, 320], [2000, 322], [2200, 327], [2400, 331],
+  [2600, 335], [2800, 338], [3000, 341], [3500, 346], [4000, 351], [4500, 354],
+  [5000, 357], [6000, 361], [7000, 364], [8000, 367], [9000, 368], [10000, 370],
+  [15000, 375], [20000, 377], [30000, 379], [40000, 380], [50000, 381],
+  [75000, 382], [1000000, 384],
+] as const;
+
+export const getKrejcieMorganSampleSize = (population: number) => {
+  if (population <= 0) return 0;
+  if (population < 10) return population;
+  const match = sampleSizeTable.find(([populationLimit]) => population <= populationLimit);
+  return match ? match[1] : 384;
+};
+
 export type CalculationScale = 4 | 5;
 
 export const answerToScale = (answer: string, calculationScale: CalculationScale = 4) => {
@@ -30,7 +55,11 @@ export const answerToScale = (answer: string, calculationScale: CalculationScale
   return '';
 };
 
-export const getSurveySummary = (records: SurveyRecord[], availableServices = serviceTypes) => {
+export const getSurveySummary = (
+  records: SurveyRecord[],
+  availableServices = serviceTypes,
+  populationCounts: Record<string, number> = {},
+) => {
   const actualCounts = records.reduce<Record<string, number>>((acc, record) => {
     const key = record.profile.serviceType;
     if (!key) return acc;
@@ -46,10 +75,14 @@ export const getSurveySummary = (records: SurveyRecord[], availableServices = se
 
   const serviceSummary = targets.map((service) => {
     const responded = actualCounts[service.name] ?? 0;
-    const gap = service.target - responded;
-    const percent = service.target > 0 ? Math.round((responded / service.target) * 100) : 0;
+    const population = populationCounts[service.name] ?? responded;
+    const target = getKrejcieMorganSampleSize(population);
+    const gap = Math.max(0, target - responded);
+    const percent = target > 0 ? Math.round((responded / target) * 100) : 0;
     return {
-      ...service,
+      name: service.name,
+      population,
+      target,
       responded,
       gap,
       percent,
