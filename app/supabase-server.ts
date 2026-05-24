@@ -1,4 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
+import type { NextRequest } from 'next/server';
+import { DEFAULT_SURVEY_CAMPAIGN_ID } from './services';
+
+export const ADMIN_SURVEY_COOKIE = 'grc_active_survey_id';
+
+export const getSurveyScope = (request?: NextRequest) => (
+  request?.cookies.get(ADMIN_SURVEY_COOKIE)?.value || DEFAULT_SURVEY_CAMPAIGN_ID
+);
+
+export const scopeFilter = (query: any, includeLegacy = false, request?: NextRequest) => {
+  const scope = getSurveyScope(request);
+  if (includeLegacy && scope === DEFAULT_SURVEY_CAMPAIGN_ID) {
+    return query.or(`campaign_id.eq.${scope},campaign_id.eq.komdigi-default,campaign_id.is.null`);
+  }
+  return query.eq('campaign_id', scope);
+};
 
 export const getRequiredEnv = (key: string) => {
   const value = process.env[key];

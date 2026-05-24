@@ -1,22 +1,24 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import { findServiceFromPath, getServiceFromPath, KOMDIGI_LOGO_URL, serviceTypes, withBasePath } from './services';
+import {
+  antiCorruptionOptions,
+  antiCorruptionQuestions,
+  directorates,
+  serviceOptions,
+  serviceQuestions,
+} from './survey-constants';
+import {
+  getSurveyValidationMessage,
+  loadJsonStorage,
+  readErrorResponse,
+  removeStorageItem,
+  saveJsonStorage,
+  saveSurveyRecord,
+  type SurveyRecord,
+} from './survey-utils';
 
-type SurveyRecord = {
-  id: string;
-  createdAt: string;
-  profile: {
-    name: string;
-    directorate: string;
-    serviceType: string;
-  };
-  responses: Record<string, string>;
-  comments: string;
-  blastId?: string;
-};
-
-const SURVEY_STORAGE_KEY = 'genesis-survey-records';
 const SURVEY_DRAFT_PREFIX = 'genesis-survey-draft';
 
 type SurveyDraft = {
@@ -29,22 +31,6 @@ type SurveyDraft = {
   comments: string;
 };
 
-const loadSurveyRecords = (): SurveyRecord[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = window.localStorage.getItem(SURVEY_STORAGE_KEY);
-    return stored ? JSON.parse(stored) as SurveyRecord[] : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveSurveyRecord = (survey: SurveyRecord) => {
-  if (typeof window === 'undefined') return;
-  const records = loadSurveyRecords();
-  window.localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify([survey, ...records]));
-};
-
 const getDraftKey = () => {
   if (typeof window === 'undefined') return '';
   const blastId = getBlastIdFromUrl();
@@ -52,25 +38,9 @@ const getDraftKey = () => {
   return `${SURVEY_DRAFT_PREFIX}:${blastId || pathKey}`;
 };
 
-const loadSurveyDraft = (key: string): SurveyDraft | null => {
-  if (typeof window === 'undefined' || !key) return null;
-  try {
-    const stored = window.localStorage.getItem(key);
-    return stored ? JSON.parse(stored) as SurveyDraft : null;
-  } catch {
-    return null;
-  }
-};
-
-const saveSurveyDraft = (key: string, draft: SurveyDraft) => {
-  if (typeof window === 'undefined' || !key) return;
-  window.localStorage.setItem(key, JSON.stringify(draft));
-};
-
-const clearSurveyDraft = (key: string) => {
-  if (typeof window === 'undefined' || !key) return;
-  window.localStorage.removeItem(key);
-};
+const loadSurveyDraft = (key: string) => loadJsonStorage<SurveyDraft | null>(key, null);
+const saveSurveyDraft = (key: string, draft: SurveyDraft) => saveJsonStorage(key, draft);
+const clearSurveyDraft = (key: string) => removeStorageItem(key);
 
 const getBlastIdFromUrl = () => {
   if (typeof window === 'undefined') return '';
@@ -87,49 +57,6 @@ const getBlastIdFromUrl = () => {
 
   return cookieBlastId ? decodeURIComponent(cookieBlastId) : '';
 };
-
-const readErrorResponse = async (response: Response) => {
-  const text = await response.text();
-  if (!text) return `Survey gagal disimpan ke server. Status ${response.status}.`;
-
-  try {
-    const payload = JSON.parse(text) as { error?: string };
-    return payload.error || `Survey gagal disimpan ke server. Status ${response.status}.`;
-  } catch {
-    return `Survey gagal disimpan ke server. Status ${response.status}: ${text.slice(0, 220)}`;
-  }
-};
-
-export const serviceQuestions = [
-  'Bagaimana penilaian Anda tentang kesesuaian persyaratan pelayanan yang diberikan?',
-  'Bagaimana penilaian Anda tentang kemudahan mekanisme dan prosedur pada saat pelayanan diberikan?',
-  'Bagaimana penilaian Anda tentang kesesuaian jangka waktu penyelesaian pelayanan?',
-  'Bagaimana penilaian Anda terhadap layanan gratis yang Anda terima?',
-  'Bagaimana penilaian Anda tentang kesesuaian produk/jasa pelayanan yang diberikan sesuai dengan ketentuan?',
-  'Bagaimana penilaian Anda mengenai kemampuan petugas pelayanan? (Jika layanan daring, bagaimana penilaian Anda terhadap kecepatan respon petugas layanan?)',
-  'Bagaimana penilaian Anda tentang keramahan dan kesopanan petugas pelayanan? (Jika layanan daring, bagaimana pendapat Anda tentang kesopanan dan keramahan petugas dalam memberikan jawaban melalui media digital?)',
-  'Bagaimana penilaian Anda terhadap petugas dalam menindaklanjuti penyelesaian keluhan terhadap pelayanan?',
-  'Bagaimana penilaian Anda terhadap kualitas sarana dan prasarana pelayanan di unit? (Jika layanan daring, bagaimana penilaian Anda tentang kemudahan penggunaan aplikasinya?)',
-];
-
-export const antiCorruptionQuestions = [
-  'Tidak ada diskriminasi pelayanan pada unit layanan ini',
-  'Tidak ada pelayanan diluar prosedur/kecurangan pelayanan pada unit layanan ini',
-  'Tidak ada penerimaan imbalan uang/barang/fasilitas diluar ketentuan yang berlaku pada unit layanan ini',
-  'Tidak ada pungutan liar (pungli) pada unit layanan ini',
-  'Tidak ada percaloan/perantara tidak resmi pada unit layanan ini',
-];
-
-export const serviceOptions = ['Sangat Tidak Puas', 'Tidak Puas', 'Puas', 'Sangat Puas'];
-export const antiCorruptionOptions = ['Sangat Tidak Setuju', 'Tidak Setuju', 'Setuju', 'Sangat Setuju'];
-
-export const directorates = [
-  'Pengembangan Ekosistem Digital',
-  'Kecerdasan Artifisial dan Teknologi Baru',
-  'Pos dan Penyiaran',
-  'Layanan Ekosistem Digital',
-  'Pengendalian Ekosistem Digital',
-];
 
 export default function HomePage() {
   const [profile, setProfile] = useState({
@@ -234,9 +161,26 @@ export default function HomePage() {
     setResponses((current) => ({ ...current, [questionKey]: answer }));
   };
 
+  const getValidationMessage = () => {
+    return getSurveyValidationMessage({
+      profile,
+      responses,
+      comments,
+      serviceQuestions,
+      antiCorruptionQuestions,
+    });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (hasExistingSubmission) return;
+
+    const validationMessage = getValidationMessage();
+    if (validationMessage) {
+      setSubmitted(false);
+      setSubmitMessage(validationMessage);
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitMessage('');
@@ -306,7 +250,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <form className="survey-grid" onSubmit={handleSubmit}>
+      <form className="survey-grid" onSubmit={handleSubmit} noValidate>
         <section className="panel guidance-panel">
           <div className="panel-title">PEDOMAN</div>
           <div className="panel-content">
@@ -368,7 +312,7 @@ export default function HomePage() {
               ))}
 
               {serviceQuestions.map((question, index) => (
-                <>
+                <Fragment key={`service-question-${index}`}>
                   <div key={`label-${index}`} className="table-cell question-cell">
                     <span className="question-number">{index + 1}</span>
                     {question}
@@ -390,7 +334,7 @@ export default function HomePage() {
                       </label>
                     );
                   })}
-                </>
+                </Fragment>
               ))}
             </div>
           </div>
@@ -404,7 +348,7 @@ export default function HomePage() {
               ))}
 
               {antiCorruptionQuestions.map((question, index) => (
-                <>
+                <Fragment key={`anti-question-${index}`}>
                   <div key={`anticell-${index}`} className="table-cell question-cell">
                     <span className="question-number">{index + 1}</span>
                     {question}
@@ -426,7 +370,7 @@ export default function HomePage() {
                       </label>
                     );
                   })}
-                </>
+                </Fragment>
               ))}
             </div>
           </div>
@@ -438,12 +382,12 @@ export default function HomePage() {
             </label>
           </div>
 
+          {submitMessage && (
+            <p className={submitted ? 'success-message' : 'error-message validation-message'}>{submitMessage}</p>
+          )}
           <button className="submit-button" type="submit" disabled={isSubmitting || hasExistingSubmission}>
             {hasExistingSubmission ? 'SURVEI SUDAH DISUBMIT' : isSubmitting ? 'MENYIMPAN...' : 'SUBMIT'}
           </button>
-          {submitMessage && (
-            <p className={submitted ? 'success-message' : 'error-message'}>{submitMessage}</p>
-          )}
         </section>
       </form>
     </main>

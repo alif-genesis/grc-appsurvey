@@ -4,20 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   antiCorruptionQuestions,
   serviceQuestions,
-} from '../survey-form';
+} from '../survey-constants';
 import { serviceTypes, withBasePath } from '../services';
 import {
   answerToScale,
-  downloadMonitoringExcel,
-  downloadMonitoringPDF,
-  downloadSkmExcel,
-  downloadSkmPDF,
   getServiceQuality,
   getSkmCalculation,
   loadSurveyRecords,
   SurveyRecord,
   type CalculationScale,
-} from '../admin/report-utils';
+} from '../admin/report-core';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 const average = (values: number[]) => {
@@ -70,7 +66,7 @@ export default function MonitoringPage() {
         const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
         const payload = await response.json() as { services?: Array<{ name: string }> };
         const names = payload.services?.map((service) => service.name).filter(Boolean);
-        if (names?.length) {
+        if (names) {
           setAvailableServices(names);
           setResponseServiceFilter((current) => (current && !names.includes(current) ? '' : current));
           setSelectedService((current) => (current && !names.includes(current) ? '' : current));
@@ -109,6 +105,26 @@ export default function MonitoringPage() {
     [records, responseServiceFilter],
   );
 
+  const downloadResponseExcel = async () => {
+    const { downloadMonitoringExcel } = await import('../admin/report-utils');
+    await downloadMonitoringExcel(filteredResponseRecords, calculationScale);
+  };
+
+  const downloadResponsePDF = async () => {
+    const { downloadMonitoringPDF } = await import('../admin/report-utils');
+    await downloadMonitoringPDF(filteredResponseRecords, calculationScale);
+  };
+
+  const downloadCalculationExcel = async () => {
+    const { downloadSkmExcel } = await import('../admin/report-utils');
+    await downloadSkmExcel(skmCalculation);
+  };
+
+  const downloadCalculationPDF = async () => {
+    const { downloadSkmPDF } = await import('../admin/report-utils');
+    await downloadSkmPDF(skmCalculation);
+  };
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -116,6 +132,7 @@ export default function MonitoringPage() {
         title="Monitoring Response"
         currentPath="/monitoring"
         actions={[
+          { href: '/control', label: 'Control Panel', secondary: true },
           { href: '/admin', label: 'Dashboard' },
           { href: '/monitoring', label: 'Monitoring' },
           { href: '/blasting', label: 'Blasting' },
@@ -175,10 +192,10 @@ export default function MonitoringPage() {
         <div className="section-heading-row">
           <h2>Detail Response Seluruh Responden</h2>
           <div className="inline-actions">
-            <button type="button" className="download-button" onClick={() => downloadMonitoringExcel(filteredResponseRecords, calculationScale)}>
+            <button type="button" className="download-button" onClick={() => { void downloadResponseExcel(); }}>
               Download Excel
             </button>
-            <button type="button" className="download-button" onClick={() => downloadMonitoringPDF(filteredResponseRecords, calculationScale)}>
+            <button type="button" className="download-button" onClick={() => { void downloadResponsePDF(); }}>
               Download PDF
             </button>
           </div>
@@ -258,10 +275,10 @@ export default function MonitoringPage() {
         <div className="section-heading-row">
           <h2>Perhitungan SKM Per Layanan</h2>
           <div className="inline-actions">
-            <button type="button" className="download-button" onClick={() => downloadSkmExcel(skmCalculation)}>
+            <button type="button" className="download-button" onClick={() => { void downloadCalculationExcel(); }}>
               Download Excel
             </button>
-            <button type="button" className="download-button" onClick={() => downloadSkmPDF(skmCalculation)}>
+            <button type="button" className="download-button" onClick={() => { void downloadCalculationPDF(); }}>
               Download Report
             </button>
           </div>
@@ -384,12 +401,16 @@ export default function MonitoringPage() {
             {records.slice(0, 5).map((record) => (
               <div key={record.id} className="record-item">
                 <div className="record-header">
-                  <strong>{record.profile.name || 'Tanpa Nama'}</strong>
-                  <span>{new Date(record.createdAt).toLocaleString('id-ID')}</span>
+                  <div>
+                    <strong>{record.profile.name || 'Tanpa Nama'}</strong>
+                    <small>{record.profile.directorate || 'Direktorat belum dipilih'}</small>
+                  </div>
+                  <time>{new Date(record.createdAt).toLocaleString('id-ID')}</time>
                 </div>
-                <p><strong>Layanan:</strong> {record.profile.serviceType || 'Belum dipilih'}</p>
-                <p><strong>Direktorat:</strong> {record.profile.directorate || 'Belum dipilih'}</p>
-                <p><strong>Catatan:</strong> {record.comments || '-'}</p>
+                <div className="record-meta">
+                  <span>{record.profile.serviceType || 'Layanan belum dipilih'}</span>
+                </div>
+                <p>{record.comments || 'Tidak ada catatan.'}</p>
               </div>
             ))}
           </div>

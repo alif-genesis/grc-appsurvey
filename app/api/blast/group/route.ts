@@ -23,11 +23,12 @@ export async function GET() {
 
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const query = supabase
       .from('blast_records')
       .select('id, blast_group_id, person_name, whatsapp, email, service_type, survey_link, submitted_at')
       .eq('blast_group_id', blastGroupId)
       .order('created_at', { ascending: true });
+    const { data, error } = await query;
 
     if (error) throw error;
 

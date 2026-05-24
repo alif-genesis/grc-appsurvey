@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { formatServerError, getSupabase } from '../../../supabase-server';
+import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
 
 type BlastPersonRow = {
   id: string;
@@ -25,13 +25,14 @@ const mapPersonRow = (row: BlastPersonRow) => ({
   serviceTypes: normalizeServices(row.service_types),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const query = supabase
       .from('blast_people')
       .select('id, created_at, updated_at, name, whatsapp, email, service_types')
       .order('created_at', { ascending: false });
+    const { data, error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
       .from('blast_people')
       .insert({
         id: crypto.randomUUID(),
+        campaign_id: getSurveyScope(request),
         name,
         whatsapp,
         email,

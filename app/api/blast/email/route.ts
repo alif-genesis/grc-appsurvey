@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
 import { serviceToSlug, withPublicSurveyUrl } from '../../../services';
-import { formatServerError, getRequiredEnv, getSupabase } from '../../../supabase-server';
+import { formatServerError, getRequiredEnv, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
 
 type EmailRecipient = {
   name: string;
@@ -197,12 +197,13 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const { count: todayCount, error: countError } = await supabase
+    const todayQuery = supabase
       .from('blast_records')
       .select('id', { count: 'exact', head: true })
       .eq('channel', 'Email')
       .eq('send_status', 'Sukses')
       .gte('sent_at', todayStart.toISOString());
+    const { count: todayCount, error: countError } = await scopeFilter(todayQuery, true, request);
 
     if (countError) throw countError;
     if ((todayCount ?? 0) + recipients.length > DAILY_EMAIL_LIMIT) {
@@ -251,6 +252,7 @@ export async function POST(request: NextRequest) {
         service_type: serviceType,
         survey_link: getSurveyLink(serviceType),
         message: email.text,
+        campaign_id: getSurveyScope(request),
       }));
 
       try {
@@ -261,18 +263,21 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const { data: duplicateRows, error: duplicateError } = await supabase
+        const duplicateQuery = supabase
           .from('blast_records')
-          .select('service_type')
+          .select('service_type, survey_link')
           .eq('channel', 'Email')
           .eq('email', normalizedEmail)
           .in('service_type', services)
           .in('send_status', ['Pending', 'Sukses'])
           .gte('created_at', duplicateSince);
+        const { data: duplicateRows, error: duplicateError } = await scopeFilter(duplicateQuery, true, request);
 
         if (duplicateError) throw duplicateError;
-        if ((duplicateRows ?? []).length > 0) {
-          const duplicateServices = duplicateRows.map((row) => row.service_type).join(', ');
+        const duplicateServices = ((duplicateRows ?? []) as Array<{ service_type: string; survey_link: string }>)
+          .filter((row) => row.survey_link === getSurveyLink(row.service_type))
+          .map((row) => row.service_type);
+        if (duplicateServices.length > 0) {
           const duplicateMessage = `Dilewati: email untuk layanan ini sudah dikirim/diproses dalam ${DUPLICATE_WINDOW_HOURS} jam terakhir (${duplicateServices}).`;
           results.push(buildResultRows(records, person, normalizedEmail, email.text, 'Gagal', duplicateMessage));
           continue;
@@ -307,7 +312,8 @@ export async function POST(request: NextRequest) {
           error: 'Diterima server SMTP. Delivery ke inbox tetap bergantung server penerima.',
           sent_at: sentAt,
           })
-          .eq('blast_group_id', blastGroupId);
+          .eq('blast_group_id', blastGroupId)
+          .eq('campaign_id', getSurveyScope(request));
 
         if (updateError) throw updateError;
 
@@ -328,7 +334,8 @@ export async function POST(request: NextRequest) {
             send_status: 'Gagal',
             error: errorMessage,
           })
-          .eq('blast_group_id', blastGroupId);
+          .eq('blast_group_id', blastGroupId)
+          .eq('campaign_id', getSurveyScope(request));
 
         results.push(records.map((record) => ({
           id: record.id,

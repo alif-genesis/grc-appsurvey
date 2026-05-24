@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serviceTypes } from '../../services';
-import { formatServerError, getSupabase } from '../../supabase-server';
+import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../supabase-server';
 
 type SurveyRecord = {
   id: string;
@@ -24,6 +24,7 @@ type SurveyRow = {
   comments: string | null;
   blast_id: string | null;
   blast_group_id: string | null;
+  campaign_id?: string | null;
 };
 
 const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
@@ -46,13 +47,21 @@ const allowedAnswers = new Set([
   'Sangat Setuju',
 ]);
 
-const getAllowedServices = async () => {
+const getAllowedServices = async (campaignId: string) => {
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    let query = supabase
       .from('service_catalog')
       .select('name')
       .eq('active', true);
+
+    if (campaignId === 'biro-humas') {
+      query = query.or('campaign_id.eq.biro-humas,campaign_id.eq.komdigi-default,campaign_id.is.null');
+    } else {
+      query = query.eq('campaign_id', campaignId);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     const services = (data as Array<{ name?: string }>).map((row) => row.name).filter((name): name is string => Boolean(name));
     return services.length > 0 ? services : serviceTypes;
@@ -61,13 +70,14 @@ const getAllowedServices = async () => {
   }
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const query = supabase
       .from('survey_records')
       .select('id, created_at, profile, responses, comments, blast_id, blast_group_id')
       .order('created_at', { ascending: false });
+    const { data, error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
@@ -96,7 +106,32 @@ export async function POST(request: NextRequest) {
     };
     const comments = survey.comments?.trim() || '';
 
-    const allowedServices = await getAllowedServices();
+    const supabase = getSupabase();
+    let campaignId = getSurveyScope(request);
+    if (survey.blastId) {
+      const existingBlastQuery = supabase
+        .from('blast_records')
+        .select('submitted_at, campaign_id')
+        .eq('id', survey.blastId)
+        .maybeSingle();
+      const { data: existingBlast, error: existingBlastError } = await existingBlastQuery;
+
+      if (existingBlastError) throw existingBlastError;
+      if (existingBlast?.submitted_at) {
+        return NextResponse.json({ error: 'Survey untuk link ini sudah pernah disubmit.' }, { status: 409 });
+      }
+      if (existingBlast?.campaign_id) campaignId = existingBlast.campaign_id;
+    } else if (survey.blastGroupId) {
+      const { data: groupRows, error: groupError } = await supabase
+        .from('blast_records')
+        .select('campaign_id')
+        .eq('blast_group_id', survey.blastGroupId)
+        .limit(1);
+      if (groupError) throw groupError;
+      if (groupRows?.[0]?.campaign_id) campaignId = groupRows[0].campaign_id;
+    }
+
+    const allowedServices = await getAllowedServices(campaignId);
     if (!allowedServices.includes(profile.serviceType)) {
       return NextResponse.json({ error: 'Jenis layanan tidak valid.' }, { status: 400 });
     }
@@ -117,20 +152,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Jawaban survey tidak valid.' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
-    if (survey.blastId) {
-      const { data: existingBlast, error: existingBlastError } = await supabase
-        .from('blast_records')
-        .select('submitted_at')
-        .eq('id', survey.blastId)
-        .maybeSingle();
-
-      if (existingBlastError) throw existingBlastError;
-      if (existingBlast?.submitted_at) {
-        return NextResponse.json({ error: 'Survey untuk link ini sudah pernah disubmit.' }, { status: 409 });
-      }
-    }
-
     const { error } = await supabase.from('survey_records').insert({
       id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
@@ -139,6 +160,7 @@ export async function POST(request: NextRequest) {
       comments,
       blast_id: survey.blastId || null,
       blast_group_id: survey.blastGroupId || null,
+      campaign_id: campaignId,
     });
 
     if (error) throw error;
@@ -148,6 +170,7 @@ export async function POST(request: NextRequest) {
         .from('blast_records')
         .update({ submitted_at: new Date().toISOString() })
         .eq('id', survey.blastId)
+        .eq('campaign_id', campaignId)
         .is('submitted_at', null);
 
       if (blastError) throw blastError;

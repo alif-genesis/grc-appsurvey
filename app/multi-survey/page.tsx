@@ -1,14 +1,24 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import {
   antiCorruptionOptions,
   antiCorruptionQuestions,
   directorates,
   serviceOptions,
   serviceQuestions,
-} from '../survey-form';
+} from '../survey-constants';
 import { KOMDIGI_LOGO_URL, withBasePath } from '../services';
+import {
+  createClientId,
+  getSurveyValidationMessage,
+  loadJsonStorage,
+  readErrorResponse,
+  removeStorageItem,
+  saveJsonStorage,
+  type SurveyProfile,
+  type SurveyRecord,
+} from '../survey-utils';
 
 type GroupRecord = {
   id: string;
@@ -21,23 +31,6 @@ type GroupRecord = {
   submittedAt?: string | null;
 };
 
-type SurveyProfile = {
-  name: string;
-  directorate: string;
-  serviceType: string;
-};
-
-type SurveyRecord = {
-  id: string;
-  createdAt: string;
-  profile: SurveyProfile;
-  responses: Record<string, string>;
-  comments: string;
-  blastId?: string;
-  blastGroupId?: string;
-};
-
-const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const MULTI_SURVEY_DRAFT_PREFIX = 'genesis-multi-survey-draft';
 
 type MultiSurveyDraft = {
@@ -51,37 +44,9 @@ type MultiSurveyDraft = {
 
 const getDraftKey = (blastGroupId: string) => `${MULTI_SURVEY_DRAFT_PREFIX}:${blastGroupId}`;
 
-const loadDraft = (key: string): MultiSurveyDraft | null => {
-  if (typeof window === 'undefined' || !key) return null;
-  try {
-    const stored = window.localStorage.getItem(key);
-    return stored ? JSON.parse(stored) as MultiSurveyDraft : null;
-  } catch {
-    return null;
-  }
-};
-
-const saveDraft = (key: string, draft: MultiSurveyDraft) => {
-  if (typeof window === 'undefined' || !key) return;
-  window.localStorage.setItem(key, JSON.stringify(draft));
-};
-
-const clearDraft = (key: string) => {
-  if (typeof window === 'undefined' || !key) return;
-  window.localStorage.removeItem(key);
-};
-
-const readErrorResponse = async (response: Response) => {
-  const text = await response.text();
-  if (!text) return `Survey gagal disimpan ke server. Status ${response.status}.`;
-
-  try {
-    const payload = JSON.parse(text) as { error?: string };
-    return payload.error || `Survey gagal disimpan ke server. Status ${response.status}.`;
-  } catch {
-    return `Survey gagal disimpan ke server. Status ${response.status}: ${text.slice(0, 220)}`;
-  }
-};
+const loadDraft = (key: string) => loadJsonStorage<MultiSurveyDraft | null>(key, null);
+const saveDraft = (key: string, draft: MultiSurveyDraft) => saveJsonStorage(key, draft);
+const clearDraft = (key: string) => removeStorageItem(key);
 
 export default function MultiSurveyPage() {
   const [records, setRecords] = useState<GroupRecord[]>([]);
@@ -180,15 +145,42 @@ export default function MultiSurveyPage() {
     setComments((current) => ({ ...current, [recordId]: value }));
   };
 
+  const getValidationMessage = () => {
+    if (pendingRecords.length === 0) return '';
+
+    for (const record of pendingRecords) {
+      const message = getSurveyValidationMessage({
+        profile,
+        responses: responses[record.id] ?? {},
+        comments: comments[record.id] ?? '',
+        serviceQuestions,
+        antiCorruptionQuestions,
+        serviceLabel: record.serviceType,
+        requireServiceType: false,
+      });
+      if (message) return message;
+    }
+
+    return '';
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const validationMessage = getValidationMessage();
+    if (validationMessage) {
+      setSubmitted(false);
+      setMessage(validationMessage);
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage('');
 
     try {
       await Promise.all(pendingRecords.map(async (record) => {
         const survey: SurveyRecord = {
-          id: createId(),
+          id: createClientId(),
           createdAt: new Date().toISOString(),
           profile: {
             name: profile.name,
@@ -239,7 +231,7 @@ export default function MultiSurveyPage() {
         </div>
       </div>
 
-      <form className="survey-grid" onSubmit={handleSubmit}>
+      <form className="survey-grid" onSubmit={handleSubmit} noValidate>
         <section className="panel guidance-panel">
           <div className="panel-title">PEDOMAN</div>
           <div className="panel-content">
@@ -298,7 +290,7 @@ export default function MultiSurveyPage() {
                   ))}
 
                   {serviceQuestions.map((question, index) => (
-                    <>
+                    <Fragment key={`service-question-${record.id}-${index}`}>
                       <div key={`label-${record.id}-${index}`} className="table-cell question-cell">
                         <span className="question-number">{index + 1}</span>
                         {question}
@@ -320,7 +312,7 @@ export default function MultiSurveyPage() {
                           </label>
                         );
                       })}
-                    </>
+                    </Fragment>
                   ))}
                 </div>
               </div>
@@ -334,7 +326,7 @@ export default function MultiSurveyPage() {
                   ))}
 
                   {antiCorruptionQuestions.map((question, index) => (
-                    <>
+                    <Fragment key={`anti-question-${record.id}-${index}`}>
                       <div key={`anti-${record.id}-${index}`} className="table-cell question-cell">
                         <span className="question-number">{index + 1}</span>
                         {question}
@@ -356,7 +348,7 @@ export default function MultiSurveyPage() {
                           </label>
                         );
                       })}
-                    </>
+                    </Fragment>
                   ))}
                 </div>
               </div>
@@ -375,12 +367,12 @@ export default function MultiSurveyPage() {
             </div>
           ))}
 
+          {message && (
+            <p className={submitted ? 'success-message' : 'error-message validation-message'}>{message}</p>
+          )}
           <button className="submit-button" type="submit" disabled={isSubmitting || pendingRecords.length === 0}>
             {pendingRecords.length === 0 ? 'SURVEI SUDAH DISUBMIT' : isSubmitting ? 'MENYIMPAN...' : 'SUBMIT'}
           </button>
-          {message && (
-            <p className={submitted ? 'success-message' : 'error-message'}>{message}</p>
-          )}
         </section>
       </form>
     </main>

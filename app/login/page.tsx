@@ -6,7 +6,7 @@ import { withBasePath } from '../services';
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const nextPath = useMemo(() => searchParams.get('next') || '/admin', [searchParams]);
+  const nextPath = useMemo(() => searchParams.get('next') || '/control', [searchParams]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');

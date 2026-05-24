@@ -15,11 +15,11 @@ export async function GET() {
     const supabase = getSupabase();
 
     if (blastId) {
-      const { data, error } = await supabase
+      const query = supabase
         .from('blast_records')
         .select('submitted_at')
-        .eq('id', blastId)
-        .maybeSingle();
+        .eq('id', blastId);
+      const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
 
@@ -29,14 +29,15 @@ export async function GET() {
       });
     }
 
-    const { data, error } = await supabase
+    const query = supabase
       .from('blast_records')
       .select('submitted_at')
       .eq('blast_group_id', blastGroupId);
+    const { data, error } = await query;
 
     if (error) throw error;
 
-    const rows = data ?? [];
+    const rows = (data ?? []) as Array<{ submitted_at: string | null }>;
     const submittedCount = rows.filter((row) => row.submitted_at).length;
 
     return NextResponse.json({

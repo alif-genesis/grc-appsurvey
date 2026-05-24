@@ -4,6 +4,7 @@ type AdminChromeProps = {
   eyebrow: string;
   title: string;
   currentPath?: string;
+  homeHref?: string;
   actions?: Array<{
     href: string;
     label: string;
@@ -11,13 +12,13 @@ type AdminChromeProps = {
   }>;
 };
 
-export function AdminHeader({ eyebrow, title, currentPath = '', actions = [] }: AdminChromeProps) {
+export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/admin', actions = [] }: AdminChromeProps) {
   const visibleActions = actions.filter((action) => action.href !== currentPath);
 
   return (
     <header className="admin-topbar">
       <div className="admin-title-row">
-        <a className="admin-brand-mark" href={withBasePath('/admin')} aria-label="Dashboard Admin">
+        <a className="admin-brand-mark" href={withBasePath(homeHref)} aria-label="Dashboard Admin">
           <img src={GENESIS_LOGO_URL} alt="Genesis" />
         </a>
         <div>

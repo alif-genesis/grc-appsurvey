@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { formatServerError, getSupabase } from '../../../supabase-server';
+import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
 
 type BlastRow = {
   id: string;
@@ -39,13 +39,14 @@ const mapBlastRow = (row: BlastRow) => ({
   submittedAt: row.submitted_at,
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const query = supabase
       .from('blast_records')
       .select('id, blast_group_id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at')
       .order('created_at', { ascending: false });
+    const { data, error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       .from('blast_records')
       .insert(records.map((record) => ({
         id: record.id || crypto.randomUUID(),
+        campaign_id: getSurveyScope(request),
         blast_group_id: record.blastGroupId || null,
         created_at: record.createdAt || new Date().toISOString(),
         channel: record.channel || 'WhatsApp',
@@ -102,13 +104,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabase();
-    const { error } = await supabase
+    const query = supabase
       .from('blast_records')
       .delete()
       .neq('id', '');
+    const { error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { defaultServiceTypes } from '../../services';
-import { formatServerError, getSupabase } from '../../supabase-server';
+import { DEFAULT_SURVEY_CAMPAIGN_ID, defaultServiceTypes } from '../../services';
+import { ADMIN_SURVEY_COOKIE, formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../supabase-server';
 
 type ServiceRow = {
   id: string;
@@ -29,23 +29,56 @@ const fallbackServices = () => defaultServiceTypes.map((name, index) => ({
   active: true,
 }));
 
-export async function GET() {
+const getServiceCampaignId = async (request: NextRequest) => {
+  const adminScope = request.cookies.get(ADMIN_SURVEY_COOKIE)?.value;
+  if (adminScope) return adminScope;
+
+  const blastId = request.cookies.get('genesis_blast_id')?.value;
+  const blastGroupId = request.cookies.get('genesis_blast_group_id')?.value;
+  if (!blastId && !blastGroupId) return getSurveyScope(request);
+
+  const supabase = getSupabase();
+  const query = supabase
+    .from('blast_records')
+    .select('campaign_id')
+    .limit(1);
+  const { data, error } = blastGroupId
+    ? await query.eq('blast_group_id', blastGroupId)
+    : await query.eq('id', blastId);
+
+  if (error) throw error;
+  return data?.[0]?.campaign_id || getSurveyScope(request);
+};
+
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const campaignId = await getServiceCampaignId(request);
+    let query = supabase
       .from('service_catalog')
       .select('id, created_at, updated_at, name, sort_order, active')
       .eq('active', true)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true });
 
+    if (campaignId === DEFAULT_SURVEY_CAMPAIGN_ID) {
+      query = query.or(`campaign_id.eq.${DEFAULT_SURVEY_CAMPAIGN_ID},campaign_id.eq.komdigi-default,campaign_id.is.null`);
+    } else {
+      query = query.eq('campaign_id', campaignId);
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
 
     const services = (data as ServiceRow[]).map(mapServiceRow);
-    return NextResponse.json({ services: services.length > 0 ? services : fallbackServices() });
-  } catch (error) {
     return NextResponse.json({
-      services: fallbackServices(),
+      services: services.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? services : fallbackServices(),
+    });
+  } catch (error) {
+    const isDefaultCampaign = getSurveyScope(request) === DEFAULT_SURVEY_CAMPAIGN_ID;
+    return NextResponse.json({
+      services: isDefaultCampaign ? fallbackServices() : [],
       warning: formatServerError(error, 'Menggunakan daftar layanan bawaan.'),
     });
   }
@@ -59,17 +92,19 @@ export async function POST(request: NextRequest) {
     if (name.length > 220) return NextResponse.json({ error: 'Nama layanan terlalu panjang.' }, { status: 400 });
 
     const supabase = getSupabase();
-    const { data: maxData } = await supabase
+    const maxQuery = supabase
       .from('service_catalog')
       .select('sort_order')
       .order('sort_order', { ascending: false })
       .limit(1);
+    const { data: maxData } = await scopeFilter(maxQuery, true, request);
     const nextSortOrder = ((maxData?.[0]?.sort_order as number | undefined) ?? 0) + 1;
 
     const { data, error } = await supabase
       .from('service_catalog')
       .insert({
         id: crypto.randomUUID(),
+        campaign_id: getSurveyScope(request),
         name,
         sort_order: nextSortOrder,
         active: true,

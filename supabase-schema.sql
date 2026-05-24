@@ -1,3 +1,30 @@
+create table if not exists public.survey_campaigns (
+  id text primary key,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  name text not null unique,
+  description text not null default '',
+  active boolean not null default true
+);
+
+alter table public.survey_campaigns enable row level security;
+
+drop policy if exists "service role can manage survey campaigns" on public.survey_campaigns;
+
+create policy "service role can manage survey campaigns"
+  on public.survey_campaigns
+  for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
+insert into public.survey_campaigns (id, name, description, active)
+values ('biro-humas', 'Biro Hubungan Masyarakat', 'Survey Kepuasan Layanan Biro Hubungan Masyarakat', true)
+on conflict (id) do update
+set name = excluded.name,
+    description = excluded.description,
+    active = true,
+    updated_at = now();
+
 create table if not exists public.survey_records (
   id text primary key,
   created_at timestamptz not null default now(),
@@ -24,6 +51,16 @@ alter table public.survey_records
 
 alter table public.survey_records
   add column if not exists blast_group_id text;
+
+alter table public.survey_records
+  add column if not exists campaign_id text not null default 'biro-humas';
+
+update public.survey_records
+set campaign_id = 'biro-humas'
+where campaign_id is null or campaign_id = 'komdigi-default';
+
+create index if not exists survey_records_campaign_created_idx
+  on public.survey_records (campaign_id, created_at desc);
 
 create table if not exists public.blast_records (
   id text primary key,
@@ -53,8 +90,21 @@ create index if not exists blast_records_email_service_idx
 alter table public.blast_records
   add column if not exists blast_group_id text;
 
+alter table public.blast_records
+  add column if not exists campaign_id text not null default 'biro-humas';
+
+update public.blast_records
+set campaign_id = 'biro-humas'
+where campaign_id is null or campaign_id = 'komdigi-default';
+
 create index if not exists blast_records_group_idx
   on public.blast_records (blast_group_id);
+
+create index if not exists blast_records_campaign_created_idx
+  on public.blast_records (campaign_id, created_at desc);
+
+create index if not exists blast_records_campaign_email_service_idx
+  on public.blast_records (campaign_id, email, service_type);
 
 alter table public.blast_records enable row level security;
 
@@ -79,6 +129,16 @@ create table if not exists public.blast_people (
 create index if not exists blast_people_created_at_idx
   on public.blast_people (created_at desc);
 
+alter table public.blast_people
+  add column if not exists campaign_id text not null default 'biro-humas';
+
+update public.blast_people
+set campaign_id = 'biro-humas'
+where campaign_id is null or campaign_id = 'komdigi-default';
+
+create index if not exists blast_people_campaign_created_idx
+  on public.blast_people (campaign_id, created_at desc);
+
 alter table public.blast_people enable row level security;
 
 drop policy if exists "service role can manage blast people" on public.blast_people;
@@ -100,6 +160,22 @@ create table if not exists public.service_catalog (
 
 create index if not exists service_catalog_active_sort_idx
   on public.service_catalog (active, sort_order, created_at);
+
+alter table public.service_catalog
+  add column if not exists campaign_id text not null default 'biro-humas';
+
+update public.service_catalog
+set campaign_id = 'biro-humas'
+where campaign_id is null or campaign_id = 'komdigi-default';
+
+alter table public.service_catalog
+  drop constraint if exists service_catalog_name_key;
+
+create unique index if not exists service_catalog_campaign_name_key
+  on public.service_catalog (campaign_id, name);
+
+create index if not exists service_catalog_campaign_active_sort_idx
+  on public.service_catalog (campaign_id, active, sort_order, created_at);
 
 alter table public.service_catalog enable row level security;
 

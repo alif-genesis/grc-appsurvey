@@ -32,7 +32,7 @@ export default function ServiceListPage() {
       const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
       const payload = await response.json() as { services?: ServiceItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
-      setServices(payload.services?.length ? payload.services : fallbackServices);
+      setServices(payload.services ?? fallbackServices);
       setMessage(payload.warning || 'Daftar layanan tersinkron dari database.');
     } catch (error) {
       setServices(fallbackServices);
@@ -105,6 +105,7 @@ export default function ServiceListPage() {
         title="Layanan yang tersedia"
         currentPath="/list"
         actions={[
+          { href: '/control', label: 'Control Panel', secondary: true },
           { href: '/admin', label: 'Dashboard' },
           { href: '/monitoring', label: 'Monitoring' },
           { href: '/blasting', label: 'Blasting' },

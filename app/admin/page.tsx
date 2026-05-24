@@ -3,12 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { serviceTypes, withBasePath } from '../services';
 import {
-  downloadAdminSummaryExcel,
-  downloadAdminSummaryPDF,
   getSurveySummary,
   loadSurveyRecords,
   SurveyRecord,
-} from './report-utils';
+} from './report-core';
 import { AdminFooter, AdminHeader } from './admin-chrome';
 
 export default function AdminPage() {
@@ -47,7 +45,7 @@ export default function AdminPage() {
         const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
         const payload = await response.json() as { services?: Array<{ name: string }> };
         const names = payload.services?.map((service) => service.name).filter(Boolean);
-        if (names?.length) setAvailableServices(names);
+        if (names) setAvailableServices(names);
       } catch {
         setAvailableServices(serviceTypes);
       }
@@ -58,6 +56,16 @@ export default function AdminPage() {
 
   const summary = useMemo(() => getSurveySummary(records, availableServices), [availableServices, records]);
 
+  const downloadSummaryExcel = async () => {
+    const { downloadAdminSummaryExcel } = await import('./report-utils');
+    await downloadAdminSummaryExcel(records, availableServices);
+  };
+
+  const downloadSummaryPDF = async () => {
+    const { downloadAdminSummaryPDF } = await import('./report-utils');
+    await downloadAdminSummaryPDF(records, availableServices);
+  };
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -65,6 +73,7 @@ export default function AdminPage() {
         title="Data Survei"
         currentPath="/admin"
         actions={[
+          { href: '/control', label: 'Control Panel', secondary: true },
           { href: '/admin', label: 'Dashboard' },
           { href: '/monitoring', label: 'Monitoring' },
           { href: '/blasting', label: 'Blasting' },
@@ -137,14 +146,14 @@ export default function AdminPage() {
             <button
               type="button"
               className="download-button"
-              onClick={() => downloadAdminSummaryExcel(records, availableServices)}
+              onClick={() => { void downloadSummaryExcel(); }}
             >
               Download Excel
             </button>
             <button
               type="button"
               className="download-button"
-              onClick={() => downloadAdminSummaryPDF(records, availableServices)}
+              onClick={() => { void downloadSummaryPDF(); }}
             >
               Download PDF
             </button>

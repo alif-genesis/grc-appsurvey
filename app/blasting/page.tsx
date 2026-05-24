@@ -197,11 +197,11 @@ export default function BlastingPage() {
       const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
       const payload = await response.json() as { services?: Array<{ name: string }> };
       const names = payload.services?.map((service) => service.name).filter(Boolean);
-      if (names?.length) {
+      if (names) {
         setAvailableServices(names);
         setNewPerson((current) => ({
           ...current,
-          serviceTypes: current.serviceTypes.length ? current.serviceTypes : [names[0]],
+          serviceTypes: current.serviceTypes.length ? current.serviceTypes : names[0] ? [names[0]] : [],
         }));
       }
     } catch {
@@ -692,6 +692,7 @@ export default function BlastingPage() {
         title="Blasting"
         currentPath="/blasting"
         actions={[
+          { href: '/control', label: 'Control Panel', secondary: true },
           { href: '/admin', label: 'Dashboard' },
           { href: '/monitoring', label: 'Monitoring' },
           { href: '/blasting', label: 'Blasting' },

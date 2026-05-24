@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_COOKIE = 'grc_admin_session';
 
-const protectedPagePaths = ['/admin', '/blasting', '/list', '/monitoring'];
+const protectedPagePaths = ['/admin', '/blasting', '/control', '/list', '/monitoring'];
 const protectedApiPaths = [
   '/api/blast/email',
   '/api/blast/history',
   '/api/blast/people',
   '/api/debug/supabase',
+  '/api/survey-campaigns',
 ];
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -89,7 +90,7 @@ export function proxy(request: NextRequest) {
 
   const loginUrl = request.nextUrl.clone();
   loginUrl.pathname = '/login';
-  loginUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
+  loginUrl.searchParams.set('next', '/control');
   return withSecurityHeaders(NextResponse.redirect(loginUrl));
 }
 

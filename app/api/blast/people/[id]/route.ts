@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { formatServerError, getSupabase } from '../../../../supabase-server';
+import { formatServerError, getSupabase, scopeFilter } from '../../../../supabase-server';
 
 type BlastPersonRow = {
   id: string;
@@ -54,12 +54,12 @@ export async function PATCH(
     }
 
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const query = supabase
       .from('blast_people')
       .update(updates)
       .eq('id', id)
-      .select('id, created_at, updated_at, name, whatsapp, email, service_types')
-      .single();
+      .select('id, created_at, updated_at, name, whatsapp, email, service_types');
+    const { data, error } = await scopeFilter(query, true, request).single();
 
     if (error) throw error;
 
@@ -73,16 +73,17 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
     const supabase = getSupabase();
-    const { error } = await supabase
+    const query = supabase
       .from('blast_people')
       .delete()
       .eq('id', id);
+    const { error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 

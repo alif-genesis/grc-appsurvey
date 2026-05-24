@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { formatServerError, getSupabase } from '../../../supabase-server';
+import { formatServerError, getSupabase, scopeFilter } from '../../../supabase-server';
 
 type ServiceRow = {
   id: string;
@@ -29,12 +29,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (name.length > 220) return NextResponse.json({ error: 'Nama layanan terlalu panjang.' }, { status: 400 });
 
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    const query = supabase
       .from('service_catalog')
       .update({ name, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('id, created_at, updated_at, name, sort_order, active')
-      .single();
+      .select('id, created_at, updated_at, name, sort_order, active');
+    const { data, error } = await scopeFilter(query, true, request).single();
 
     if (error) throw error;
 
@@ -47,14 +47,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = getSupabase();
-    const { error } = await supabase
+    const query = supabase
       .from('service_catalog')
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq('id', id);
+    const { error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
