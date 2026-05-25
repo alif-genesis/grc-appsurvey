@@ -21,6 +21,11 @@ const REQUEST_COOLDOWN_MS = 1000;
 
 let lastEmailBlastAt = 0;
 
+const getEnv = (...keys: string[]) => {
+  const key = keys.find((candidate) => process.env[candidate]);
+  return key ? process.env[key] : undefined;
+};
+
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
@@ -191,9 +196,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const from = getRequiredEnv('EMAIL_FROM');
-    const user = getRequiredEnv('EMAIL_USER');
-    const pass = getRequiredEnv('EMAIL_APP_PASSWORD').replace(/\s/g, '');
+    const from = getEnv('EMAIL_FROM', 'MAIL_FROM_ADDRESS') || getRequiredEnv('EMAIL_FROM');
+    const user = getEnv('EMAIL_USER', 'MAIL_USERNAME') || getRequiredEnv('EMAIL_USER');
+    const pass = (getEnv('EMAIL_APP_PASSWORD', 'MAIL_PASSWORD') || getRequiredEnv('EMAIL_APP_PASSWORD')).replace(/\s/g, '');
+    const host = getEnv('EMAIL_HOST', 'MAIL_HOST');
+    const port = Number(getEnv('EMAIL_PORT', 'MAIL_PORT') || 587);
+    const encryption = (getEnv('EMAIL_ENCRYPTION', 'MAIL_ENCRYPTION') || '').toLowerCase();
+    const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -213,7 +222,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransport(host ? {
+      host,
+      port,
+      secure,
+      requireTLS: !secure && (encryption === 'tls' || encryption === 'starttls'),
+      auth: { user, pass },
+    } : {
       service: 'gmail',
       auth: { user, pass },
     });
