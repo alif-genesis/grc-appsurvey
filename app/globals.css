@@ -274,22 +274,21 @@ select {
 
 .admin-topbar {
   display: grid;
-  grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.6fr);
   align-items: center;
-  gap: 24px;
+  gap: 28px;
   margin-bottom: 22px;
-  padding: 18px;
+  padding: 18px 26px;
   border: 1px solid rgba(15, 78, 184, 0.12);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(14px);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.07);
 }
 
 .admin-title-row {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -297,27 +296,27 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 92px;
-  min-width: 92px;
-  height: 72px;
+  width: 82px;
+  min-width: 82px;
+  height: 64px;
 }
 
 .admin-brand-mark img {
   max-width: 100%;
-  max-height: 72px;
+  max-height: 64px;
   object-fit: contain;
 }
 
 .admin-title-row p {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   color: #475569;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .admin-title-row h1 {
   margin: 0;
   color: #0f172a;
-  font-size: clamp(1.8rem, 3.2vw, 3rem);
+  font-size: clamp(2rem, 3.1vw, 3rem);
   line-height: 1.05;
 }
 
@@ -338,11 +337,27 @@ select {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 28px;
   min-width: 0;
 }
 
-.admin-link,
+.admin-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 6px 0;
+  border-radius: 0;
+  background: transparent;
+  color: #0f172a;
+  text-decoration: none;
+  font-weight: 800;
+  box-shadow: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+}
+
 .download-button {
   display: inline-flex;
   align-items: center;
@@ -358,20 +373,26 @@ select {
   cursor: pointer;
 }
 
-.download-button:hover,
 .admin-link:hover {
+  color: #0f4eb8;
+}
+
+.download-button:hover {
   transform: translateY(-1px);
 }
 
 .secondary-admin-link {
-  background: #0f766e;
-  box-shadow: 0 12px 28px rgba(15, 118, 110, 0.18);
+  background: transparent;
+  color: #0f172a;
+  box-shadow: none;
 }
 
 .active-admin-link {
-  outline: 3px solid rgba(15, 78, 184, 0.18);
-  background: #1d72d2;
-  box-shadow: 0 0 0 5px rgba(29, 114, 210, 0.16), 0 14px 30px rgba(15, 78, 184, 0.22);
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  box-shadow: none;
+  border-bottom-color: #0f4eb8;
 }
 
 .control-create-panel p,
@@ -1785,6 +1806,7 @@ select {
 
   .admin-nav {
     justify-content: flex-start;
+    gap: 20px;
   }
 
   .compact-dashboard-grid,
@@ -2223,6 +2245,11 @@ select {
   .submit-button {
     width: 100%;
     border-radius: 12px;
+  }
+
+  .admin-link {
+    width: auto;
+    border-radius: 0;
   }
 
   .campaign-card {

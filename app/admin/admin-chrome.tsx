@@ -12,7 +12,19 @@ type AdminChromeProps = {
   }>;
 };
 
+type AdminAction = NonNullable<AdminChromeProps['actions']>[number];
+
+const defaultAdminActions: AdminAction[] = [
+  { href: '/control', label: 'Control Panel' },
+  { href: '/admin', label: 'Monitoring' },
+  { href: '/monitoring', label: 'Hasil Survey' },
+  { href: '/blasting', label: 'Blasting' },
+  { href: '/list', label: 'List Layanan' },
+];
+
 export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/admin', actions = [] }: AdminChromeProps) {
+  const navActions: AdminAction[] = actions.length > 0 ? actions : defaultAdminActions;
+
   return (
     <header className="admin-topbar">
       <div className="admin-title-row">
@@ -26,7 +38,7 @@ export function AdminHeader({ eyebrow, title, currentPath = '', homeHref = '/adm
       </div>
 
       <nav className="admin-nav" aria-label="Navigasi admin">
-        {actions.map((action) => (
+        {navActions.map((action) => (
           <a
             key={action.href}
             className={[
