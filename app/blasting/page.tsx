@@ -115,6 +115,15 @@ const getMonitoringStatus = (row: BlastHistory) => {
   return 'Belum terkirim';
 };
 
+const getMonitoringStatusClass = (row: BlastHistory) => {
+  if (row.status === 'Gagal') return 'failed-pill';
+  if (row.submittedAt) return 'done-pill';
+  if (row.clickedAt) return 'link-opened-pill';
+  if (row.openedAt) return 'email-opened-pill';
+  if (row.sentAt || row.status === 'Sukses') return 'sent-pill';
+  return 'pending-pill';
+};
+
 const normalizeColumnName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 const normalizeServiceName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 
@@ -977,8 +986,8 @@ export default function BlastingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredHistory.map((row) => (
-                  <tr key={row.id}>
+                {filteredHistory.map((row, index) => (
+                  <tr key={`${row.id}-${row.serviceType}-${row.channel}-${index}`}>
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
                     <td>{row.personName}</td>
                     <td>{row.channel === 'WhatsApp' ? row.whatsapp : row.email}</td>
@@ -989,7 +998,7 @@ export default function BlastingPage() {
                     <td>{formatDateTime(row.clickedAt)}</td>
                     <td>{formatDateTime(row.submittedAt)}</td>
                     <td>
-                      <span className={`status-pill ${row.status === 'Gagal' ? 'failed-pill' : row.submittedAt ? 'done-pill' : ''}`}>
+                      <span className={`status-pill ${getMonitoringStatusClass(row)}`}>
                         {getMonitoringStatus(row)}
                       </span>
                     </td>
