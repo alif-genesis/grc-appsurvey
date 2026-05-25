@@ -69,7 +69,15 @@ const isCrossSiteMutation = (request: NextRequest) => {
   if (!origin) return false;
 
   try {
-    return new URL(origin).host !== request.nextUrl.host;
+    const originHost = new URL(origin).host;
+    const allowedHosts = new Set([
+      request.nextUrl.host,
+      request.headers.get('host') || '',
+      request.headers.get('x-forwarded-host') || '',
+      process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).host : '',
+    ].filter(Boolean));
+
+    return !allowedHosts.has(originHost);
   } catch {
     return true;
   }

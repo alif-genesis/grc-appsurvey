@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { PUBLIC_SURVEY_URL } from '../../../services';
 import { getSupabase } from '../../../supabase-server';
 
 const getSafeRedirectUrl = (request: NextRequest, target?: string | null) => {
@@ -7,7 +8,10 @@ const getSafeRedirectUrl = (request: NextRequest, target?: string | null) => {
   try {
     const targetUrl = new URL(target);
     const appUrl = new URL(request.url);
-    return targetUrl.origin === appUrl.origin ? targetUrl.toString() : appUrl.origin;
+    const publicSurveyUrl = new URL(PUBLIC_SURVEY_URL);
+    return [appUrl.origin, publicSurveyUrl.origin].includes(targetUrl.origin)
+      ? targetUrl.toString()
+      : appUrl.origin;
   } catch {
     return new URL('/', request.url).toString();
   }
