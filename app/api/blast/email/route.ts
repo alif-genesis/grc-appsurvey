@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
-import { serviceToSlug, withPublicSurveyUrl } from '../../../services';
+import { serviceToSlug } from '../../../services';
 import { formatServerError, getRequiredEnv, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
 
 type EmailRecipient = {
@@ -21,6 +21,8 @@ const REQUEST_COOLDOWN_MS = 1000;
 
 let lastEmailBlastAt = 0;
 
+const FALLBACK_PUBLIC_APP_URL = 'https://survey.genetikasolusibisnis.co.id';
+
 const getEnv = (...keys: string[]) => {
   const key = keys.find((candidate) => process.env[candidate]);
   return key ? process.env[key] : undefined;
@@ -31,6 +33,34 @@ const sleep = (ms: number) => new Promise((resolve) => {
 });
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isLocalUrl = (value: string) => {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  } catch {
+    return true;
+  }
+};
+
+const getPublicBaseUrl = (request: NextRequest) => {
+  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  const forwardedUrl = forwardedHost ? `${forwardedProto}://${forwardedHost}` : '';
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || '';
+  const publicUrl = forwardedUrl && !isLocalUrl(forwardedUrl)
+    ? forwardedUrl
+    : configuredUrl && !isLocalUrl(configuredUrl)
+      ? configuredUrl
+      : FALLBACK_PUBLIC_APP_URL;
+
+  return publicUrl.replace(/\/+$/g, '');
+};
+
+const withPublicUrl = (baseUrl: string, path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
+};
+
 const hasMailServer = async (email: string) => {
   const domain = email.split('@')[1];
   if (!domain) return false;
@@ -43,18 +73,18 @@ const hasMailServer = async (email: string) => {
   }
 };
 
-const getSurveyLink = (serviceType: string) => {
-  return withPublicSurveyUrl(`/${serviceToSlug(serviceType)}`);
+const getSurveyLink = (baseUrl: string, serviceType: string) => {
+  return withPublicUrl(baseUrl, `/${serviceToSlug(serviceType)}`);
 };
 
-const getMultiSurveyLink = () => {
-  return withPublicSurveyUrl('/multi-survey');
+const getMultiSurveyLink = (baseUrl: string) => {
+  return withPublicUrl(baseUrl, '/multi-survey');
 };
 
-const getTrackingUrl = (path: string, blastGroupId: string, target?: string) => {
+const getTrackingUrl = (baseUrl: string, path: string, blastGroupId: string, target?: string) => {
   const params = new URLSearchParams({ blastGroupId });
   if (target) params.set('target', target);
-  return `${withPublicSurveyUrl(path)}?${params.toString()}`;
+  return `${withPublicUrl(baseUrl, path)}?${params.toString()}`;
 };
 
 const getRecipientServices = (person: EmailRecipient) => (
@@ -63,11 +93,11 @@ const getRecipientServices = (person: EmailRecipient) => (
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-const buildEmail = (person: EmailRecipient, blastGroupId: string) => {
+const buildEmail = (person: EmailRecipient, blastGroupId: string, baseUrl: string) => {
   const services = getRecipientServices(person);
-  const surveyLink = services.length > 1 ? getMultiSurveyLink() : getSurveyLink(services[0]);
-  const clickLink = getTrackingUrl('/api/track/click', blastGroupId, surveyLink);
-  const openPixel = getTrackingUrl('/api/track/open', blastGroupId);
+  const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl) : getSurveyLink(baseUrl, services[0]);
+  const clickLink = getTrackingUrl(baseUrl, '/api/track/click', blastGroupId, surveyLink);
+  const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
   const serviceListHtml = services.map((service) => `<li>${service}</li>`).join('');
   const subject = 'Permohonan Pengisian Survei Kepuasan Layanan';
@@ -206,6 +236,7 @@ export async function POST(request: NextRequest) {
     const encryption = (getEnv('EMAIL_ENCRYPTION', 'MAIL_ENCRYPTION') || '').toLowerCase();
     const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();
+    const publicBaseUrl = getPublicBaseUrl(request);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayQuery = supabase
@@ -256,7 +287,7 @@ export async function POST(request: NextRequest) {
       const normalizedEmail = normalizeEmail(person.email);
       const blastGroupId = crypto.randomUUID();
       const services = getRecipientServices(person);
-      const email = buildEmail(person, blastGroupId);
+      const email = buildEmail(person, blastGroupId, publicBaseUrl);
       const sentAt = new Date().toISOString();
       const duplicateSince = new Date(Date.now() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
       const records = services.map((serviceType) => ({
@@ -267,7 +298,7 @@ export async function POST(request: NextRequest) {
         whatsapp: person.whatsapp || '',
         email: normalizedEmail,
         service_type: serviceType,
-        survey_link: getSurveyLink(serviceType),
+        survey_link: getSurveyLink(publicBaseUrl, serviceType),
         message: email.text,
         campaign_id: getSurveyScope(request),
       }));
@@ -292,7 +323,7 @@ export async function POST(request: NextRequest) {
 
         if (duplicateError) throw duplicateError;
         const duplicateServices = ((duplicateRows ?? []) as Array<{ service_type: string; survey_link: string }>)
-          .filter((row) => row.survey_link === getSurveyLink(row.service_type))
+          .filter((row) => row.survey_link === getSurveyLink(publicBaseUrl, row.service_type))
           .map((row) => row.service_type);
         if (duplicateServices.length > 0) {
           const duplicateMessage = `Dilewati: email untuk layanan ini sudah dikirim/diproses dalam ${DUPLICATE_WINDOW_HOURS} jam terakhir (${duplicateServices}).`;

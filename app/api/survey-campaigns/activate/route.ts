@@ -15,7 +15,12 @@ const getRedirectUrl = (request: NextRequest, path: string) => {
 
 export async function GET(request: NextRequest) {
   const id = request.nextUrl.searchParams.get('id')?.trim() || '';
-  if (!id) return NextResponse.redirect(getRedirectUrl(request, '/control'));
+  const wantsJson = request.nextUrl.searchParams.get('format') === 'json';
+  if (!id) {
+    return wantsJson
+      ? NextResponse.json({ error: 'ID survey tidak ditemukan.' }, { status: 400 })
+      : NextResponse.redirect(getRedirectUrl(request, '/control'));
+  }
 
   const supabase = getSupabase();
   const { data, error } = await supabase
@@ -25,7 +30,9 @@ export async function GET(request: NextRequest) {
     .eq('active', true)
     .maybeSingle();
 
-  const response = NextResponse.redirect(getRedirectUrl(request, '/admin'));
+  const response = wantsJson
+    ? NextResponse.json({ ok: true, next: '/admin' })
+    : NextResponse.redirect(getRedirectUrl(request, '/admin'));
   if (data?.id || (error && id === DEFAULT_SURVEY_CAMPAIGN_ID)) {
     response.cookies.set(ADMIN_SURVEY_COOKIE, data?.id || id, {
       httpOnly: true,

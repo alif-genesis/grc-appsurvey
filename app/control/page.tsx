@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useState } from 'react';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 import { withBasePath } from '../services';
 
@@ -153,6 +153,25 @@ export default function ControlPanelPage() {
     }
   };
 
+  const manageCampaign = async (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setMessage('Mengaktifkan survey...');
+
+    try {
+      const response = await fetch(withBasePath(`/api/survey-campaigns/activate?id=${encodeURIComponent(id)}&format=json`), {
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Gagal mengaktifkan survey.');
+
+      window.location.href = withBasePath('/admin');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Gagal mengaktifkan survey.');
+      setIsSaving(false);
+    }
+  };
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -160,6 +179,7 @@ export default function ControlPanelPage() {
         title="Kelola Survey"
         currentPath="/control"
         homeHref="/control"
+        actions={[]}
       />
 
       {message && <p className={`admin-data-message ${isLoading || isSaving ? 'is-loading' : ''}`}>{message}</p>}
@@ -244,7 +264,11 @@ export default function ControlPanelPage() {
                       </>
                     ) : (
                       <>
-                        <a className="admin-link" href={withBasePath(`/api/survey-campaigns/activate?id=${encodeURIComponent(campaign.id)}`)}>
+                        <a
+                          className="admin-link"
+                          href={withBasePath(`/api/survey-campaigns/activate?id=${encodeURIComponent(campaign.id)}`)}
+                          onClick={(event) => manageCampaign(event, campaign.id)}
+                        >
                           Kelola
                         </a>
                         <button type="button" className="text-button" onClick={() => startEditCampaign(campaign)} disabled={isSaving}>
