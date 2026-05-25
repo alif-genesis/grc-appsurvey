@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '../../../supabase-server';
 
+const getSafeRedirectUrl = (request: NextRequest, target?: string | null) => {
+  if (!target) return new URL('/', request.url).toString();
+
+  try {
+    const targetUrl = new URL(target);
+    const appUrl = new URL(request.url);
+    return targetUrl.origin === appUrl.origin ? targetUrl.toString() : appUrl.origin;
+  } catch {
+    return new URL('/', request.url).toString();
+  }
+};
+
 export async function GET(request: NextRequest) {
   const blastId = request.nextUrl.searchParams.get('blastId');
   const blastGroupId = request.nextUrl.searchParams.get('blastGroupId');
+  const target = request.nextUrl.searchParams.get('target');
 
   if (!blastId && !blastGroupId) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(getSafeRedirectUrl(request, target));
   }
 
   const supabase = getSupabase();
@@ -36,7 +49,7 @@ export async function GET(request: NextRequest) {
   const singleRow = rows.length === 1 ? rows[0] : null;
   const redirectUrl = blastGroupId && rows.length > 1
     ? new URL('/multi-survey', request.url).toString()
-    : singleRow?.survey_link || new URL('/', request.url).toString();
+    : singleRow?.survey_link || getSafeRedirectUrl(request, target);
   const response = NextResponse.redirect(redirectUrl);
 
   if (blastGroupId) {

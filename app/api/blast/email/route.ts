@@ -51,8 +51,10 @@ const getMultiSurveyLink = () => {
   return withPublicSurveyUrl('/multi-survey');
 };
 
-const getTrackingUrl = (path: string, blastGroupId: string) => {
-  return `${withPublicSurveyUrl(path)}?blastGroupId=${encodeURIComponent(blastGroupId)}`;
+const getTrackingUrl = (path: string, blastGroupId: string, target?: string) => {
+  const params = new URLSearchParams({ blastGroupId });
+  if (target) params.set('target', target);
+  return `${withPublicSurveyUrl(path)}?${params.toString()}`;
 };
 
 const getRecipientServices = (person: EmailRecipient) => (
@@ -64,7 +66,7 @@ const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const buildEmail = (person: EmailRecipient, blastGroupId: string) => {
   const services = getRecipientServices(person);
   const surveyLink = services.length > 1 ? getMultiSurveyLink() : getSurveyLink(services[0]);
-  const clickLink = getTrackingUrl('/api/track/click', blastGroupId);
+  const clickLink = getTrackingUrl('/api/track/click', blastGroupId, surveyLink);
   const openPixel = getTrackingUrl('/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
   const serviceListHtml = services.map((service) => `<li>${service}</li>`).join('');
