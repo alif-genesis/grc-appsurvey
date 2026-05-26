@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
         if (pendingInsertError) throw pendingInsertError;
 
         const sendInfo = await sendMailWithRetry(transporter, {
-          from: `"GRC Survey" <${from}>`,
+          from: `"Survei Kepuasan Layanan" <${from}>`,
           to: normalizedEmail,
           subject: email.subject,
           text: email.text,
