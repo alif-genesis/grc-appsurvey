@@ -100,7 +100,7 @@ const buildEmail = (person: EmailRecipient, blastGroupId: string, baseUrl: strin
   const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
   const serviceListHtml = services.map((service) => `<li>${service}</li>`).join('');
-  const subject = 'Permohonan Pengisian Survei Kepuasan Layanan';
+  const subject = 'Survei Kepuasan Layanan';
   const text = [
     `Yth. ${person.name},`,
     '',
