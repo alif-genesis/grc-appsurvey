@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceTypes } from '../../services';
-import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../supabase-server';
+import { DEFAULT_SURVEY_CAMPAIGN_ID, serviceTypes } from '../../services';
+import { formatServerError, getRequestedSurveyScope, getSupabase, scopeFilter } from '../../supabase-server';
 
 type SurveyRecord = {
   id: string;
@@ -12,6 +12,7 @@ type SurveyRecord = {
   };
   responses: Record<string, string>;
   comments: string;
+  campaignId?: string;
   blastId?: string;
   blastGroupId?: string;
 };
@@ -55,8 +56,8 @@ const getAllowedServices = async (campaignId: string) => {
       .select('name')
       .eq('active', true);
 
-    if (campaignId === 'biro-humas') {
-      query = query.or('campaign_id.eq.biro-humas,campaign_id.eq.komdigi-default,campaign_id.is.null');
+    if (campaignId === DEFAULT_SURVEY_CAMPAIGN_ID) {
+      query = query.or(`campaign_id.eq.${DEFAULT_SURVEY_CAMPAIGN_ID},campaign_id.eq.komdigi-default,campaign_id.is.null`);
     } else {
       query = query.eq('campaign_id', campaignId);
     }
@@ -68,6 +69,20 @@ const getAllowedServices = async (campaignId: string) => {
   } catch {
     return serviceTypes;
   }
+};
+
+const isActiveCampaign = async (campaignId: string) => {
+  if (campaignId === DEFAULT_SURVEY_CAMPAIGN_ID) return true;
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('survey_campaigns')
+    .select('id')
+    .eq('id', campaignId)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
 };
 
 export async function GET(request: NextRequest) {
@@ -107,7 +122,11 @@ export async function POST(request: NextRequest) {
     const comments = survey.comments?.trim() || '';
 
     const supabase = getSupabase();
-    let campaignId = getSurveyScope(request);
+    if (!survey.blastId && !survey.blastGroupId && !survey.campaignId && !request.nextUrl.searchParams.get('survey')?.trim()) {
+      return NextResponse.json({ error: 'Submit hanya dapat dilakukan melalui link survei resmi dari blast.' }, { status: 403 });
+    }
+
+    let campaignId = getRequestedSurveyScope(request, survey.campaignId);
     if (survey.blastId) {
       const existingBlastQuery = supabase
         .from('blast_records')
@@ -129,6 +148,10 @@ export async function POST(request: NextRequest) {
         .limit(1);
       if (groupError) throw groupError;
       if (groupRows?.[0]?.campaign_id) campaignId = groupRows[0].campaign_id;
+    }
+
+    if (!await isActiveCampaign(campaignId)) {
+      return NextResponse.json({ error: 'Survey tidak aktif atau tidak ditemukan.' }, { status: 400 });
     }
 
     const allowedServices = await getAllowedServices(campaignId);

@@ -21,10 +21,8 @@ export const antiCorruptionQuestions = [
 export const serviceOptions = ['Sangat Tidak Puas', 'Tidak Puas', 'Puas', 'Sangat Puas'];
 export const antiCorruptionOptions = ['Sangat Tidak Setuju', 'Tidak Setuju', 'Setuju', 'Sangat Setuju'];
 
-export const directorates = [
-  'Pengembangan Ekosistem Digital',
-  'Kecerdasan Artifisial dan Teknologi Baru',
-  'Pos dan Penyiaran',
-  'Layanan Ekosistem Digital',
-  'Pengendalian Ekosistem Digital',
+export const defaultWorkUnits = [
+  'Biro Hubungan Masyarakat',
 ];
+
+export const directorates = defaultWorkUnits;

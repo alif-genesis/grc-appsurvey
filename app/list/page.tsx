@@ -30,7 +30,7 @@ export default function ServiceListPage() {
   const refreshServices = async () => {
     try {
       const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
-      const payload = await response.json() as { services?: ServiceItem[]; warning?: string; error?: string };
+      const payload = await response.json() as { campaignId?: string; services?: ServiceItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
       setServices(payload.services ?? fallbackServices);
       setMessage(payload.warning || 'Daftar layanan tersinkron dari database.');
@@ -110,6 +110,7 @@ export default function ServiceListPage() {
           { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
+          { href: '/work-units', label: 'Satuan Kerja' },
         ]}
       />
 

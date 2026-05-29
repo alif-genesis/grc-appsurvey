@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DEFAULT_SURVEY_CAMPAIGN_ID, defaultServiceTypes } from '../../services';
+import { DEFAULT_SURVEY_CAMPAIGN_ID } from '../../services';
+import { defaultWorkUnits } from '../../survey-constants';
 import { ADMIN_SURVEY_COOKIE, formatServerError, getRequestedSurveyScope, getSupabase, getSurveyScope, scopeFilter } from '../../supabase-server';
 
-type ServiceRow = {
+type WorkUnitRow = {
   id: string;
   created_at: string;
   updated_at: string;
@@ -11,7 +12,7 @@ type ServiceRow = {
   active: boolean | null;
 };
 
-const mapServiceRow = (row: ServiceRow) => ({
+const mapWorkUnitRow = (row: WorkUnitRow) => ({
   id: row.id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -20,8 +21,8 @@ const mapServiceRow = (row: ServiceRow) => ({
   active: row.active ?? true,
 });
 
-const fallbackServices = () => defaultServiceTypes.map((name, index) => ({
-  id: `default-${index + 1}`,
+const fallbackWorkUnits = () => defaultWorkUnits.map((name, index) => ({
+  id: `default-work-unit-${index + 1}`,
   createdAt: '',
   updatedAt: '',
   name,
@@ -29,7 +30,7 @@ const fallbackServices = () => defaultServiceTypes.map((name, index) => ({
   active: true,
 }));
 
-const getServiceCampaignId = async (request: NextRequest) => {
+const getWorkUnitCampaignId = async (request: NextRequest) => {
   const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
   if (requestedScope) return requestedScope;
 
@@ -56,9 +57,9 @@ const getServiceCampaignId = async (request: NextRequest) => {
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
-    const campaignId = await getServiceCampaignId(request);
+    const campaignId = await getWorkUnitCampaignId(request);
     let query = supabase
-      .from('service_catalog')
+      .from('work_unit_catalog')
       .select('id, created_at, updated_at, name, sort_order, active')
       .eq('active', true)
       .order('sort_order', { ascending: true })
@@ -71,21 +72,20 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await query;
-
     if (error) throw error;
 
-    const services = (data as ServiceRow[]).map(mapServiceRow);
+    const workUnits = (data as WorkUnitRow[]).map(mapWorkUnitRow);
     return NextResponse.json({
       campaignId,
-      services: services.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? services : fallbackServices(),
+      workUnits: workUnits.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? workUnits : fallbackWorkUnits(),
     });
   } catch (error) {
     const campaignId = getRequestedSurveyScope(request);
     const isDefaultCampaign = campaignId === DEFAULT_SURVEY_CAMPAIGN_ID;
     return NextResponse.json({
       campaignId,
-      services: isDefaultCampaign ? fallbackServices() : [],
-      warning: formatServerError(error, 'Menggunakan daftar layanan bawaan.'),
+      workUnits: isDefaultCampaign ? fallbackWorkUnits() : [],
+      warning: formatServerError(error, 'Menggunakan daftar satuan kerja bawaan.'),
     });
   }
 }
@@ -94,12 +94,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { name?: string };
     const name = body.name?.trim() || '';
-    if (!name) return NextResponse.json({ error: 'Nama layanan wajib diisi.' }, { status: 400 });
-    if (name.length > 220) return NextResponse.json({ error: 'Nama layanan terlalu panjang.' }, { status: 400 });
+    if (!name) return NextResponse.json({ error: 'Nama satuan kerja wajib diisi.' }, { status: 400 });
+    if (name.length > 220) return NextResponse.json({ error: 'Nama satuan kerja terlalu panjang.' }, { status: 400 });
 
     const supabase = getSupabase();
     const maxQuery = supabase
-      .from('service_catalog')
+      .from('work_unit_catalog')
       .select('sort_order')
       .order('sort_order', { ascending: false })
       .limit(1);
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const nextSortOrder = ((maxData?.[0]?.sort_order as number | undefined) ?? 0) + 1;
 
     const { data, error } = await supabase
-      .from('service_catalog')
+      .from('work_unit_catalog')
       .insert({
         id: crypto.randomUUID(),
         campaign_id: getSurveyScope(request),
@@ -120,10 +120,10 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ service: mapServiceRow(data as ServiceRow) });
+    return NextResponse.json({ workUnit: mapWorkUnitRow(data as WorkUnitRow) });
   } catch (error) {
     return NextResponse.json(
-      { error: formatServerError(error, 'Gagal menambahkan layanan.') },
+      { error: formatServerError(error, 'Gagal menambahkan satuan kerja.') },
       { status: 500 },
     );
   }

@@ -195,7 +195,7 @@ export default function ControlPanelPage() {
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Contoh: Direktorat A Komdigi"
+              placeholder="Contoh: Satuan Kerja A Komdigi"
               maxLength={180}
             />
           </label>

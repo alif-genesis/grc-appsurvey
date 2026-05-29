@@ -3,9 +3,16 @@ import type { NextRequest } from 'next/server';
 import { DEFAULT_SURVEY_CAMPAIGN_ID } from './services';
 
 export const ADMIN_SURVEY_COOKIE = 'grc_active_survey_id';
+export const PUBLIC_SURVEY_QUERY_PARAM = 'survey';
 
 export const getSurveyScope = (request?: NextRequest) => (
   request?.cookies.get(ADMIN_SURVEY_COOKIE)?.value || DEFAULT_SURVEY_CAMPAIGN_ID
+);
+
+export const getRequestedSurveyScope = (request?: NextRequest, fallback?: string) => (
+  request?.nextUrl.searchParams.get(PUBLIC_SURVEY_QUERY_PARAM)?.trim()
+  || fallback?.trim()
+  || getSurveyScope(request)
 );
 
 export const scopeFilter = (query: any, includeLegacy = false, request?: NextRequest) => {

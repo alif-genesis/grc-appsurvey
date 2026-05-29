@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { serviceToSlug, serviceTypes, withBasePath, withPublicSurveyUrl } from '../services';
+import { serviceToSlug, serviceTypes, withBasePath, withPublicSurveyUrl, withSurveyParam } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type BlastPerson = {
@@ -21,6 +21,9 @@ type BlastHistory = {
   personName: string;
   whatsapp: string;
   email: string;
+  senderId?: string;
+  senderLabel?: string;
+  senderEmail?: string;
   serviceType: string;
   surveyLink: string;
   message: string;
@@ -36,6 +39,11 @@ type BlastHistory = {
 type EmailBlastResult = Omit<BlastHistory, 'channel' | 'createdAt'>;
 type ImportPerson = Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'> & {
   rowNumber: number;
+};
+type EmailSender = {
+  id: string;
+  label: string;
+  email: string;
 };
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
@@ -57,8 +65,8 @@ const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
-const getSurveyLink = (serviceType: string) => withBasePath(`/${serviceToSlug(serviceType)}`);
-const getMultiSurveyLink = () => withBasePath('/multi-survey');
+const getSurveyLink = (serviceType: string, campaignId = '') => withSurveyParam(withBasePath(`/${serviceToSlug(serviceType)}`), campaignId);
+const getMultiSurveyLink = (campaignId = '') => withSurveyParam(withBasePath('/multi-survey'), campaignId);
 const getAbsoluteLink = (path: string) => {
   return withPublicSurveyUrl(path);
 };
@@ -67,9 +75,9 @@ const getPersonServices = (person: Pick<BlastPerson, 'serviceType' | 'serviceTyp
   person.serviceTypes?.length ? person.serviceTypes : person.serviceType ? [person.serviceType] : []
 );
 
-const buildMessage = (person: BlastPerson, channel: BlastHistory['channel']) => {
+const buildMessage = (person: BlastPerson, channel: BlastHistory['channel'], campaignId: string) => {
   const services = getPersonServices(person);
-  const link = services.length > 1 ? getMultiSurveyLink() : getSurveyLink(services[0]);
+  const link = services.length > 1 ? getMultiSurveyLink(campaignId) : getSurveyLink(services[0], campaignId);
   const target = channel === 'WhatsApp' ? person.whatsapp : person.email;
   return `Halo ${person.name}, mohon isi survei ${services.join(', ')} melalui link ${link}. Dikirim ke ${target}.`;
 };
@@ -80,11 +88,11 @@ const normalizeWhatsAppNumber = (value: string) => {
   return digits;
 };
 
-const buildWhatsAppText = (person: BlastPerson) => {
+const buildWhatsAppText = (person: BlastPerson, campaignId: string) => {
   const services = getPersonServices(person);
   const link = services.length > 1
-    ? getAbsoluteLink(getMultiSurveyLink())
-    : getAbsoluteLink(getSurveyLink(services[0]));
+    ? getAbsoluteLink(getMultiSurveyLink(campaignId))
+    : getAbsoluteLink(getSurveyLink(services[0], campaignId));
 
   return [
     `Halo ${person.name},`,
@@ -98,8 +106,8 @@ const buildWhatsAppText = (person: BlastPerson) => {
   ].join('\n');
 };
 
-const getWhatsAppWebLink = (person: BlastPerson) => (
-  `https://wa.me/${normalizeWhatsAppNumber(person.whatsapp)}?text=${encodeURIComponent(buildWhatsAppText(person))}`
+const getWhatsAppWebLink = (person: BlastPerson, campaignId: string) => (
+  `https://wa.me/${normalizeWhatsAppNumber(person.whatsapp)}?text=${encodeURIComponent(buildWhatsAppText(person, campaignId))}`
 );
 
 const formatDateTime = (value?: string | null) => (
@@ -182,17 +190,37 @@ export default function BlastingPage() {
   const [historySearch, setHistorySearch] = useState('');
   const [historyServiceFilter, setHistoryServiceFilter] = useState('');
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
+  const [activeCampaignId, setActiveCampaignId] = useState('');
+  const [emailSenders, setEmailSenders] = useState<EmailSender[]>([]);
+  const [selectedSenderId, setSelectedSenderId] = useState('');
 
   useEffect(() => {
     loadServices();
+    loadEmailSenders();
     loadPeople();
     refreshHistory();
   }, []);
 
+  const loadEmailSenders = async () => {
+    try {
+      const response = await fetch(withBasePath('/api/blast/senders'), { cache: 'no-store' });
+      const payload = await response.json() as { senders?: EmailSender[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar sender.');
+      const senders = payload.senders ?? [];
+      setEmailSenders(senders);
+      setSelectedSenderId((current) => current || senders[0]?.id || '');
+    } catch (error) {
+      setEmailSenders([]);
+      setSelectedSenderId('');
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil daftar sender.');
+    }
+  };
+
   const loadServices = async () => {
     try {
       const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
-      const payload = await response.json() as { services?: Array<{ name: string }> };
+      const payload = await response.json() as { campaignId?: string; services?: Array<{ name: string }> };
+      setActiveCampaignId(payload.campaignId || '');
       const names = payload.services?.map((service) => service.name).filter(Boolean);
       if (names) {
         setAvailableServices(names);
@@ -250,6 +278,8 @@ export default function BlastingPage() {
         row.personName,
         row.whatsapp,
         row.email,
+        row.senderLabel,
+        row.senderEmail,
         row.serviceType,
         row.surveyLink,
         monitoringStatus,
@@ -554,8 +584,8 @@ export default function BlastingPage() {
           whatsapp: person.whatsapp,
           email: person.email,
           serviceType,
-          surveyLink: getSurveyLink(serviceType),
-          message: buildMessage(person, 'WhatsApp'),
+          surveyLink: getSurveyLink(serviceType, activeCampaignId),
+          message: buildMessage(person, 'WhatsApp', activeCampaignId),
           status: 'Sukses' as const,
           createdAt: now,
           sentAt: now,
@@ -586,7 +616,7 @@ export default function BlastingPage() {
       for (const [index, batch] of batches.entries()) {
         setBlastNotice(`Membuka WhatsApp Web batch ${index + 1}/${batches.length} (${batch.length} orang)...`);
         batch.forEach((person) => {
-          window.open(getWhatsAppWebLink(person), '_blank', 'noopener,noreferrer');
+          window.open(getWhatsAppWebLink(person, activeCampaignId), '_blank', 'noopener,noreferrer');
         });
 
         if (index < batches.length - 1) {
@@ -607,6 +637,10 @@ export default function BlastingPage() {
   const startEmailBlast = async () => {
     const recipients = blastTargets.filter((person) => person.email.trim());
     if (recipients.length === 0) return;
+    if (!selectedSenderId) {
+      setBlastNotice('Pilih sender email terlebih dahulu.');
+      return;
+    }
 
     setIsEmailBlasting(true);
     setBlastNotice('');
@@ -624,7 +658,7 @@ export default function BlastingPage() {
         const response = await fetch(withBasePath('/api/blast/email'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recipients: batch }),
+          body: JSON.stringify({ recipients: batch, senderId: selectedSenderId }),
         });
         const payload = await response.json() as { results?: EmailBlastResult[]; error?: string };
 
@@ -686,10 +720,30 @@ export default function BlastingPage() {
           { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
+          { href: '/work-units', label: 'Satuan Kerja' },
         ]}
       />
 
       {blastNotice && <p className="blast-notice">{blastNotice}</p>}
+
+      <section className="table-card blast-section">
+        <div className="section-heading-row">
+          <h2>Sender Email</h2>
+          <button type="button" className="text-button" onClick={loadEmailSenders}>Refresh</button>
+        </div>
+        <div className="filter-row">
+          <label>
+            Pengirim Email
+            <select value={selectedSenderId} onChange={(event) => setSelectedSenderId(event.target.value)}>
+              {emailSenders.length === 0 ? (
+                <option value="">Sender belum dikonfigurasi</option>
+              ) : emailSenders.map((sender) => (
+                <option key={sender.id} value={sender.id}>{sender.label} - {sender.email}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
 
       <section className="table-card blast-section">
         <div className="section-heading-row">
@@ -864,7 +918,7 @@ export default function BlastingPage() {
                         ) : visibleServices.length > 1 ? (
                           <span>{visibleServices.length} layanan dalam 1 link email</span>
                         ) : (
-                          <a href={getSurveyLink(visibleServices[0])}>{getSurveyLink(visibleServices[0])}</a>
+                          <a href={getSurveyLink(visibleServices[0], activeCampaignId)}>{getSurveyLink(visibleServices[0], activeCampaignId)}</a>
                         )}
                       </td>
                       <td>
@@ -904,6 +958,7 @@ export default function BlastingPage() {
           onClick={startEmailBlast}
           disabled={
             isEmailBlasting
+            || !selectedSenderId
             || blastTargets.every((person) => !person.email.trim())
           }
         >
@@ -975,6 +1030,7 @@ export default function BlastingPage() {
                   <th>Waktu</th>
                   <th>Nama</th>
                   <th>Tujuan</th>
+                  <th>Sender</th>
                   <th>Layanan</th>
                   <th>Link</th>
                   <th>Terkirim</th>
@@ -990,9 +1046,20 @@ export default function BlastingPage() {
                   <tr key={`${row.id}-${row.serviceType}-${row.channel}-${index}`}>
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
                     <td>{row.personName}</td>
-                    <td>{row.channel === 'WhatsApp' ? row.whatsapp : row.email}</td>
+                    <td>
+                      <span className={`channel-badge ${row.channel === 'Email' ? 'email-channel' : 'whatsapp-channel'}`}>{row.channel}</span>
+                      <span className="history-target">{row.channel === 'WhatsApp' ? row.whatsapp : row.email}</span>
+                    </td>
+                    <td>
+                      {row.senderEmail ? (
+                        <span className="sender-pill">
+                          <strong>{row.senderLabel || row.senderEmail}</strong>
+                          <small>{row.senderEmail}</small>
+                        </span>
+                      ) : '-'}
+                    </td>
                     <td>{row.serviceType}</td>
-                    <td><a href={row.surveyLink}>{row.surveyLink}</a></td>
+                    <td><a className="history-link" href={row.surveyLink}>Buka link</a></td>
                     <td>{formatDateTime(row.sentAt)}</td>
                     <td>{formatDateTime(row.openedAt)}</td>
                     <td>{formatDateTime(row.clickedAt)}</td>

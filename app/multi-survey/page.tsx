@@ -4,13 +4,14 @@ import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import {
   antiCorruptionOptions,
   antiCorruptionQuestions,
-  directorates,
+  defaultWorkUnits,
   serviceOptions,
   serviceQuestions,
 } from '../survey-constants';
 import { KOMDIGI_LOGO_URL, withBasePath } from '../services';
 import {
   createClientId,
+  getServiceCommentPrompt,
   getSurveyValidationMessage,
   loadJsonStorage,
   readErrorResponse,
@@ -53,6 +54,7 @@ export default function MultiSurveyPage() {
   const [profile, setProfile] = useState({ name: '', directorate: '' });
   const [responses, setResponses] = useState<Record<string, Record<string, string>>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
+  const [workUnits, setWorkUnits] = useState<string[]>(defaultWorkUnits);
   const [message, setMessage] = useState('Memuat daftar layanan...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -62,6 +64,17 @@ export default function MultiSurveyPage() {
   const pendingRecords = records.filter((record) => !record.submittedAt);
 
   useEffect(() => {
+    const loadWorkUnits = async () => {
+      try {
+        const response = await fetch(withBasePath('/api/work-units/'), { cache: 'no-store' });
+        const payload = await response.json() as { workUnits?: Array<{ name: string }> };
+        const names = payload.workUnits?.map((workUnit) => workUnit.name).filter(Boolean) ?? defaultWorkUnits;
+        setWorkUnits(names.length ? names : defaultWorkUnits);
+      } catch {
+        setWorkUnits(defaultWorkUnits);
+      }
+    };
+
     const loadGroup = async () => {
       try {
         const response = await fetch(withBasePath('/api/blast/group'), { cache: 'no-store' });
@@ -98,6 +111,7 @@ export default function MultiSurveyPage() {
       }
     };
 
+    loadWorkUnits();
     loadGroup();
   }, []);
 
@@ -261,14 +275,14 @@ export default function MultiSurveyPage() {
               />
             </label>
             <label>
-              Direktorat
+              Satuan Kerja
               <select
                 value={profile.directorate}
                 onChange={(event) => setProfile((current) => ({ ...current, directorate: event.target.value }))}
                 required
               >
                 <option value="">Pilih Salah Satu</option>
-                {directorates.map((item) => (
+                {workUnits.map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
@@ -358,7 +372,7 @@ export default function MultiSurveyPage() {
 
               <div className="comment-section">
                 <label>
-                  Kritik, saran, atau masukan untuk layanan ini
+                  {getServiceCommentPrompt(record.serviceType)}
                   <textarea
                     value={comments[record.id] ?? ''}
                     onChange={(event) => updateComment(record.id, event.target.value)}

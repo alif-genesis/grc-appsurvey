@@ -121,6 +121,7 @@ export default function MonitoringPage() {
           { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
+          { href: '/work-units', label: 'Satuan Kerja' },
         ]}
       />
 
@@ -292,7 +293,7 @@ export default function MonitoringPage() {
                 <tr>
                   <th>Tanggal</th>
                   <th>Nama Lengkap</th>
-                  <th>Direktorat</th>
+                  <th>Satuan Kerja</th>
                   <th>Jenis Layanan</th>
                   {serviceQuestions.map((_, index) => (
                     <th key={`service-head-${index}`}>

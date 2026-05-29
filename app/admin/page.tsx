@@ -171,6 +171,7 @@ export default function AdminPage() {
           { href: '/monitoring', label: 'Hasil Survey' },
           { href: '/blasting', label: 'Blasting' },
           { href: '/list', label: 'List Layanan' },
+          { href: '/work-units', label: 'Satuan Kerja' },
         ]}
       />
       {loadMessage && <p className={`admin-data-message ${isLoading ? 'is-loading' : ''}`}>{loadMessage}</p>}
@@ -327,7 +328,7 @@ export default function AdminPage() {
                 <div className="record-header">
                   <div>
                     <strong>{record.profile.name || 'Tanpa Nama'}</strong>
-                    <small>{record.profile.directorate || 'Direktorat belum dipilih'}</small>
+                    <small>{record.profile.directorate || 'Satuan kerja belum dipilih'}</small>
                   </div>
                   <time>{new Date(record.createdAt).toLocaleString('id-ID')}</time>
                 </div>

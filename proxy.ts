@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_COOKIE = 'grc_admin_session';
 
-const protectedPagePaths = ['/admin', '/blasting', '/control', '/list', '/monitoring'];
+const protectedPagePaths = ['/admin', '/blasting', '/control', '/list', '/monitoring', '/work-units'];
 const protectedApiPaths = [
   '/api/blast/email',
   '/api/blast/history',
   '/api/blast/people',
+  '/api/blast/senders',
   '/api/debug/supabase',
   '/api/survey-campaigns',
 ];
@@ -57,6 +58,10 @@ const isProtectedPath = (request: NextRequest) => {
   }
 
   if ((pathname === '/api/services' || pathname.startsWith('/api/services/')) && request.method !== 'GET') {
+    return true;
+  }
+
+  if ((pathname === '/api/work-units' || pathname.startsWith('/api/work-units/')) && request.method !== 'GET') {
     return true;
   }
 

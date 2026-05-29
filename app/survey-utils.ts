@@ -10,6 +10,7 @@ export type SurveyRecord = {
   profile: SurveyProfile;
   responses: Record<string, string>;
   comments: string;
+  campaignId?: string;
   blastId?: string;
   blastGroupId?: string;
 };
@@ -56,6 +57,15 @@ export const readErrorResponse = async (response: Response, fallback = 'Survey g
   }
 };
 
+export const getServiceCommentPrompt = (serviceType?: string) => {
+  const serviceName = serviceType?.trim().replace(/^layanan\s+/i, '');
+  if (!serviceName) {
+    return 'Apabila terdapat kritik, saran, atau masukan dapat disampaikan melalui kolom di bawah ini';
+  }
+
+  return `Apabila terdapat kritik, saran, atau masukan untuk layanan ${serviceName} dapat disampaikan melalui kolom di bawah ini`;
+};
+
 type ValidationInput = {
   profile: Pick<SurveyProfile, 'name' | 'directorate'> & Partial<Pick<SurveyProfile, 'serviceType'>>;
   responses: Record<string, string>;
@@ -78,7 +88,7 @@ export const getSurveyValidationMessage = ({
   const suffix = serviceLabel ? ` untuk ${serviceLabel}` : '';
 
   if (!profile.name.trim()) return 'Anda belum mengisikan nama lengkap.';
-  if (!profile.directorate.trim()) return 'Anda belum memilih direktorat.';
+  if (!profile.directorate.trim()) return 'Anda belum memilih satuan kerja.';
   if (requireServiceType && !profile.serviceType?.trim()) {
     return 'Jenis layanan belum terisi. Silakan buka link layanan yang sesuai.';
   }

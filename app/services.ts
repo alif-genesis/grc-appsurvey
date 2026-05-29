@@ -28,6 +28,7 @@ export const GENESIS_LOGO_URL = 'https://genetikasolusibisnis.co.id/wp-content/u
 export const KOMDIGI_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/f/fc/Logo_Kementerian_Komunikasi_dan_Digital_Republik_Indonesia_%282024_full_version%29.svg';
 export const PUBLIC_SURVEY_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://survey.genetikasolusibisnis.co.id').replace(/\/+$/g, '');
 export const DEFAULT_SURVEY_CAMPAIGN_ID = (process.env.NEXT_PUBLIC_SURVEY_SCOPE || 'biro-humas').trim() || 'biro-humas';
+export const SURVEY_QUERY_PARAM = 'survey';
 
 export const serviceToSlug = (service: string) =>
   service
@@ -46,6 +47,17 @@ export const withBasePath = (path: string) => {
 export const withPublicSurveyUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${PUBLIC_SURVEY_URL}${normalizedPath}`;
+};
+
+export const withSurveyParam = (url: string, campaignId?: string) => {
+  const surveyId = campaignId?.trim();
+  if (!surveyId) return url;
+
+  const hashIndex = url.indexOf('#');
+  const beforeHash = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : '';
+  const separator = beforeHash.includes('?') ? '&' : '?';
+  return `${beforeHash}${separator}${SURVEY_QUERY_PARAM}=${encodeURIComponent(surveyId)}${hash}`;
 };
 
 const normalizePathValue = (value: string) =>

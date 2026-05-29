@@ -73,7 +73,7 @@ const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: Calcula
   const header = [
     'Tanggal',
     'Nama Lengkap',
-    'Direktorat',
+    'Satuan Kerja',
     'Jenis Layanan',
     ...serviceQuestions.flatMap((question, index) => [
       `Kepuasan ${index + 1}`,
@@ -376,7 +376,7 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[], calculation
     head: [[
       'Tanggal',
       'Nama',
-      'Direktorat',
+      'Satuan Kerja',
       'Layanan',
       ...serviceQuestions.map((_, index) => `K${index + 1}`),
       ...antiCorruptionQuestions.map((_, index) => `A${index + 1}`),

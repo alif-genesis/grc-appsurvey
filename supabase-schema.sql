@@ -93,6 +93,15 @@ alter table public.blast_records
 alter table public.blast_records
   add column if not exists campaign_id text not null default 'biro-humas';
 
+alter table public.blast_records
+  add column if not exists sender_id text not null default '';
+
+alter table public.blast_records
+  add column if not exists sender_label text not null default '';
+
+alter table public.blast_records
+  add column if not exists sender_email text not null default '';
+
 update public.blast_records
 set campaign_id = 'biro-humas'
 where campaign_id is null or campaign_id = 'komdigi-default';
@@ -211,5 +220,56 @@ values
   ('default-020', 'Layanan Pengajuan Izin Perceraian', 20, true),
   ('default-021', 'Layanan Penanganan Insiden Website DJED', 21, true)
 on conflict (id) do nothing;
+
+create table if not exists public.work_unit_catalog (
+  id text primary key,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  name text not null,
+  sort_order integer not null default 0,
+  active boolean not null default true,
+  campaign_id text not null default 'biro-humas'
+);
+
+create unique index if not exists work_unit_catalog_campaign_name_key
+  on public.work_unit_catalog (campaign_id, name);
+
+create index if not exists work_unit_catalog_campaign_active_sort_idx
+  on public.work_unit_catalog (campaign_id, active, sort_order, created_at);
+
+alter table public.work_unit_catalog enable row level security;
+
+drop policy if exists "service role can manage work unit catalog" on public.work_unit_catalog;
+
+create policy "service role can manage work unit catalog"
+  on public.work_unit_catalog
+  for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
+insert into public.work_unit_catalog (id, campaign_id, name, sort_order, active)
+values
+  ('biro-humas-work-unit-001', 'biro-humas', 'Biro Hubungan Masyarakat', 1, true)
+on conflict (id) do update
+set campaign_id = excluded.campaign_id,
+    name = excluded.name,
+    sort_order = excluded.sort_order,
+    active = true,
+    updated_at = now();
+
+insert into public.work_unit_catalog (id, campaign_id, name, sort_order, active)
+values
+  ('survei-infrastruktur-digital-work-unit-001', 'survei-infrastruktur-digital', 'Tim Kerja Keuangan', 1, true),
+  ('survei-infrastruktur-digital-work-unit-002', 'survei-infrastruktur-digital', 'Tim Kerja Umum', 2, true),
+  ('survei-infrastruktur-digital-work-unit-003', 'survei-infrastruktur-digital', 'Tim Kerja Perencanaan, Program dan Pelaporan', 3, true),
+  ('survei-infrastruktur-digital-work-unit-004', 'survei-infrastruktur-digital', 'Tim Kerja SDM dan Organisasi', 4, true),
+  ('survei-infrastruktur-digital-work-unit-005', 'survei-infrastruktur-digital', 'Tim Kerja Hukum dan Kerjasama', 5, true),
+  ('survei-infrastruktur-digital-work-unit-006', 'survei-infrastruktur-digital', 'Tim Kerja Manajemen Risiko dan Kepatuhan Internal', 6, true)
+on conflict (id) do update
+set campaign_id = excluded.campaign_id,
+    name = excluded.name,
+    sort_order = excluded.sort_order,
+    active = true,
+    updated_at = now();
 
 notify pgrst, 'reload schema';

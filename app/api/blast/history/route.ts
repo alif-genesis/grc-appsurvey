@@ -9,6 +9,9 @@ type BlastRow = {
   person_name: string;
   whatsapp: string;
   email: string;
+  sender_id?: string | null;
+  sender_label?: string | null;
+  sender_email?: string | null;
   service_type: string;
   survey_link: string;
   message: string;
@@ -27,6 +30,9 @@ const mapBlastRow = (row: BlastRow) => ({
   personName: row.person_name,
   whatsapp: row.whatsapp,
   email: row.email,
+  senderId: row.sender_id ?? '',
+  senderLabel: row.sender_label ?? '',
+  senderEmail: row.sender_email ?? '',
   serviceType: row.service_type,
   surveyLink: row.survey_link,
   message: row.message,
@@ -39,14 +45,32 @@ const mapBlastRow = (row: BlastRow) => ({
   submittedAt: row.submitted_at,
 });
 
+const HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, whatsapp, email, sender_id, sender_label, sender_email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
+const LEGACY_HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
+
+const stripSenderColumns = <T extends Record<string, unknown>>(record: T) => {
+  const { sender_id, sender_label, sender_email, ...rest } = record;
+  return rest;
+};
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const query = supabase
       .from('blast_records')
-      .select('id, blast_group_id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at')
+      .select(HISTORY_SELECT)
       .order('created_at', { ascending: false });
-    const { data, error } = await scopeFilter(query, true, request);
+    let { data, error }: { data: unknown; error: unknown } = await scopeFilter(query, true, request);
+
+    if (error) {
+      const legacyQuery = supabase
+        .from('blast_records')
+        .select(LEGACY_HISTORY_SELECT)
+        .order('created_at', { ascending: false });
+      const legacyResult = await scopeFilter(legacyQuery, true, request);
+      data = legacyResult.data;
+      error = legacyResult.error;
+    }
 
     if (error) throw error;
 
@@ -69,9 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('blast_records')
-      .insert(records.map((record) => ({
+    const rows = records.map((record) => ({
         id: record.id || crypto.randomUUID(),
         campaign_id: getSurveyScope(request),
         blast_group_id: record.blastGroupId || null,
@@ -80,6 +102,9 @@ export async function POST(request: NextRequest) {
         person_name: record.personName || '',
         whatsapp: record.whatsapp || '',
         email: record.email || '',
+        sender_id: record.senderId || '',
+        sender_label: record.senderLabel || '',
+        sender_email: record.senderEmail || '',
         service_type: record.serviceType || '',
         survey_link: record.surveyLink || '',
         message: record.message || '',
@@ -89,9 +114,22 @@ export async function POST(request: NextRequest) {
         opened_at: record.openedAt || null,
         clicked_at: record.clickedAt || null,
         submitted_at: record.submittedAt || null,
-      })))
-      .select('id, blast_group_id, created_at, channel, person_name, whatsapp, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at')
+      }));
+    let { data, error }: { data: unknown; error: unknown } = await supabase
+      .from('blast_records')
+      .insert(rows)
+      .select(HISTORY_SELECT)
       .order('created_at', { ascending: false });
+
+    if (error) {
+      const legacyResult = await supabase
+        .from('blast_records')
+        .insert(rows.map(stripSenderColumns))
+        .select(LEGACY_HISTORY_SELECT)
+        .order('created_at', { ascending: false });
+      data = legacyResult.data;
+      error = legacyResult.error;
+    }
 
     if (error) throw error;
 

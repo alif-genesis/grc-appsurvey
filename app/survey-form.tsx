@@ -1,15 +1,16 @@
 'use client';
 
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
-import { findServiceFromPath, getServiceFromPath, KOMDIGI_LOGO_URL, serviceTypes, withBasePath } from './services';
+import { findServiceFromPath, getServiceFromPath, KOMDIGI_LOGO_URL, serviceTypes, SURVEY_QUERY_PARAM, withBasePath } from './services';
 import {
   antiCorruptionOptions,
   antiCorruptionQuestions,
-  directorates,
+  defaultWorkUnits,
   serviceOptions,
   serviceQuestions,
 } from './survey-constants';
 import {
+  getServiceCommentPrompt,
   getSurveyValidationMessage,
   loadJsonStorage,
   readErrorResponse,
@@ -33,9 +34,10 @@ type SurveyDraft = {
 
 const getDraftKey = () => {
   if (typeof window === 'undefined') return '';
+  const campaignId = getCampaignIdFromUrl();
   const blastId = getBlastIdFromUrl();
   const pathKey = window.location.pathname.replace(/^\/+|\/+$/g, '') || 'home';
-  return `${SURVEY_DRAFT_PREFIX}:${blastId || pathKey}`;
+  return `${SURVEY_DRAFT_PREFIX}:${campaignId || 'default'}:${blastId || pathKey}`;
 };
 
 const loadSurveyDraft = (key: string) => loadJsonStorage<SurveyDraft | null>(key, null);
@@ -46,7 +48,10 @@ const getBlastIdFromUrl = () => {
   if (typeof window === 'undefined') return '';
   const paramsBlastId = new URLSearchParams(window.location.search).get('blastId');
   if (paramsBlastId) {
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('blastId');
+    const nextSearch = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`);
     return paramsBlastId;
   }
 
@@ -58,13 +63,23 @@ const getBlastIdFromUrl = () => {
   return cookieBlastId ? decodeURIComponent(cookieBlastId) : '';
 };
 
+const getCampaignIdFromUrl = () => {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get(SURVEY_QUERY_PARAM)?.trim() || '';
+};
+
 const hasBlastContext = () => {
   if (typeof window === 'undefined') return false;
   return Boolean(
     new URLSearchParams(window.location.search).get('blastId')
-    || document.cookie.split('; ').some((cookie) => cookie.startsWith('genesis_blast_id=')),
+    || document.cookie.split('; ').some((cookie) => (
+      cookie.startsWith('genesis_blast_id=')
+      || cookie.startsWith('genesis_blast_group_id=')
+    )),
   );
 };
+
+const hasSubmitContext = () => hasBlastContext() || Boolean(getCampaignIdFromUrl());
 
 export default function HomePage() {
   const [profile, setProfile] = useState({
@@ -79,11 +94,14 @@ export default function HomePage() {
   const [submitMessage, setSubmitMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
+  const [hasSubmissionContext, setHasSubmissionContext] = useState(false);
+  const [workUnits, setWorkUnits] = useState<string[]>(defaultWorkUnits);
   const [isDraftReady, setIsDraftReady] = useState(false);
   const allowNavigationRef = useRef(false);
   const draftKeyRef = useRef('');
 
   useEffect(() => {
+    setHasSubmissionContext(hasSubmitContext());
     const fallbackServiceType = getServiceFromPath(window.location.pathname);
     const draftKey = getDraftKey();
     const draft = loadSurveyDraft(draftKey);
@@ -117,7 +135,11 @@ export default function HomePage() {
 
     const resolveService = async () => {
       try {
-        const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+        const campaignId = getCampaignIdFromUrl();
+        const servicesPath = campaignId
+          ? `/api/services/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
+          : '/api/services/';
+        const response = await fetch(withBasePath(servicesPath), { cache: 'no-store' });
         const payload = await response.json() as { services?: Array<{ name: string }> };
         const availableServices = payload.services?.map((service) => service.name).filter(Boolean) ?? serviceTypes;
         const serviceType = findServiceFromPath(window.location.pathname, availableServices) || fallbackServiceType;
@@ -127,8 +149,24 @@ export default function HomePage() {
       }
     };
 
+    const loadWorkUnits = async () => {
+      try {
+        const campaignId = getCampaignIdFromUrl();
+        const workUnitsPath = campaignId
+          ? `/api/work-units/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
+          : '/api/work-units/';
+        const response = await fetch(withBasePath(workUnitsPath), { cache: 'no-store' });
+        const payload = await response.json() as { workUnits?: Array<{ name: string }> };
+        const names = payload.workUnits?.map((workUnit) => workUnit.name).filter(Boolean) ?? defaultWorkUnits;
+        setWorkUnits(names.length ? names : defaultWorkUnits);
+      } catch {
+        setWorkUnits(defaultWorkUnits);
+      }
+    };
+
     if (hasBlastContext()) checkSubmission();
     if (!fallbackServiceType) resolveService();
+    loadWorkUnits();
   }, []);
 
   useEffect(() => {
@@ -185,6 +223,11 @@ export default function HomePage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (hasExistingSubmission) return;
+    if (!hasSubmissionContext) {
+      setSubmitted(false);
+      setSubmitMessage('Tombol submit hanya aktif untuk link survei resmi dari blast.');
+      return;
+    }
 
     const validationMessage = getValidationMessage();
     if (validationMessage) {
@@ -202,6 +245,7 @@ export default function HomePage() {
       profile,
       responses,
       comments,
+      campaignId: getCampaignIdFromUrl() || undefined,
       blastId: getBlastIdFromUrl() || undefined,
     };
 
@@ -288,14 +332,14 @@ export default function HomePage() {
               />
             </label>
             <label>
-              Direktorat
+              Satuan Kerja
               <select
                 value={profile.directorate}
                 onChange={(e) => handleProfileChange('directorate', e.target.value)}
                 required
               >
                 <option value="">Pilih Salah Satu</option>
-                {directorates.map((item) => (
+                {workUnits.map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
@@ -388,7 +432,7 @@ export default function HomePage() {
 
           <div className="comment-section">
             <label>
-              Apabila terdapat kritik, saran, atau masukan dapat disampaikan melalui kolom di bawah ini
+              {getServiceCommentPrompt(profile.serviceType)}
               <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Tulis masukan Anda..." required />
             </label>
           </div>
@@ -396,8 +440,11 @@ export default function HomePage() {
           {submitMessage && (
             <p className={submitted ? 'success-message' : 'error-message validation-message'}>{submitMessage}</p>
           )}
-          <button className="submit-button" type="submit" disabled={isSubmitting || hasExistingSubmission}>
-            {hasExistingSubmission ? 'SURVEI SUDAH DISUBMIT' : isSubmitting ? 'MENYIMPAN...' : 'SUBMIT'}
+          {!hasSubmissionContext && (
+            <p className="error-message validation-message">Halaman ini hanya untuk preview. Submit aktif dari link survei resmi dari blast.</p>
+          )}
+          <button className="submit-button" type="submit" disabled={isSubmitting || hasExistingSubmission || !hasSubmissionContext}>
+            {!hasSubmissionContext ? 'PREVIEW SAJA' : hasExistingSubmission ? 'SURVEI SUDAH DISUBMIT' : isSubmitting ? 'MENYIMPAN...' : 'SUBMIT'}
           </button>
         </section>
       </form>

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
 import { serviceToSlug } from '../../../services';
-import { formatServerError, getRequiredEnv, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
+import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
+import { getEmailSender } from '../email-senders';
 
 type EmailRecipient = {
   name: string;
@@ -22,11 +23,6 @@ const REQUEST_COOLDOWN_MS = 1000;
 let lastEmailBlastAt = 0;
 
 const FALLBACK_PUBLIC_APP_URL = 'https://survey.genetikasolusibisnis.co.id';
-
-const getEnv = (...keys: string[]) => {
-  const key = keys.find((candidate) => process.env[candidate]);
-  return key ? process.env[key] : undefined;
-};
 
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -73,11 +69,11 @@ const hasMailServer = async (email: string) => {
   }
 };
 
-const getSurveyLink = (baseUrl: string, serviceType: string) => {
+const getSurveyLink = (baseUrl: string, serviceType: string, campaignId: string) => {
   return withPublicUrl(baseUrl, `/${serviceToSlug(serviceType)}`);
 };
 
-const getMultiSurveyLink = (baseUrl: string) => {
+const getMultiSurveyLink = (baseUrl: string, campaignId: string) => {
   return withPublicUrl(baseUrl, '/multi-survey');
 };
 
@@ -93,9 +89,9 @@ const getRecipientServices = (person: EmailRecipient) => (
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-const buildEmail = (person: EmailRecipient, blastGroupId: string, baseUrl: string) => {
+const buildEmail = (person: EmailRecipient, blastGroupId: string, baseUrl: string, campaignId: string) => {
   const services = getRecipientServices(person);
-  const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl) : getSurveyLink(baseUrl, services[0]);
+  const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl, campaignId) : getSurveyLink(baseUrl, services[0], campaignId);
   const clickLink = getTrackingUrl(baseUrl, '/api/track/click', blastGroupId, surveyLink);
   const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
@@ -155,6 +151,9 @@ const buildResultRows = (
     id: string;
     service_type: string;
     survey_link: string;
+    sender_id: string;
+    sender_label: string;
+    sender_email: string;
   }[],
   person: EmailRecipient,
   normalizedEmail: string,
@@ -169,11 +168,31 @@ const buildResultRows = (
   whatsapp: person.whatsapp,
   serviceType: record.service_type,
   surveyLink: record.survey_link,
+  senderId: record.sender_id,
+  senderLabel: record.sender_label,
+  senderEmail: record.sender_email,
   message,
   status,
   error,
   sentAt,
 }));
+
+const stripSenderColumns = <T extends Record<string, unknown>>(record: T) => {
+  const { sender_id, sender_label, sender_email, ...rest } = record;
+  return rest;
+};
+
+const insertBlastRows = async (
+  supabase: ReturnType<typeof getSupabase>,
+  rows: Record<string, unknown>[],
+) => {
+  const { error } = await supabase.from('blast_records').insert(rows);
+  if (!error) return;
+
+  const legacyRows = rows.map(stripSenderColumns);
+  const { error: legacyError } = await supabase.from('blast_records').insert(legacyRows);
+  if (legacyError) throw error;
+};
 
 const insertFailedRecords = async (
   supabase: ReturnType<typeof getSupabase>,
@@ -184,19 +203,20 @@ const insertFailedRecords = async (
     person_name: string;
     whatsapp: string;
     email: string;
+    sender_id: string;
+    sender_label: string;
+    sender_email: string;
     service_type: string;
     survey_link: string;
     message: string;
   }[],
   errorMessage: string,
 ) => {
-  const { error } = await supabase.from('blast_records').insert(records.map((record) => ({
+  await insertBlastRows(supabase, records.map((record) => ({
     ...record,
     send_status: 'Gagal',
     error: errorMessage,
   })));
-
-  if (error) throw error;
 };
 
 export async function POST(request: NextRequest) {
@@ -210,7 +230,7 @@ export async function POST(request: NextRequest) {
     }
     lastEmailBlastAt = nowMs;
 
-    const body = await request.json() as { recipients?: EmailRecipient[] };
+    const body = await request.json() as { recipients?: EmailRecipient[]; senderId?: string };
     const recipients = (body.recipients ?? []).filter((person) => (
       person.name?.trim()
       && person.email?.trim()
@@ -228,12 +248,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const from = getEnv('EMAIL_FROM', 'MAIL_FROM_ADDRESS') || getRequiredEnv('EMAIL_FROM');
-    const user = getEnv('EMAIL_USER', 'MAIL_USERNAME') || getRequiredEnv('EMAIL_USER');
-    const pass = (getEnv('EMAIL_APP_PASSWORD', 'MAIL_PASSWORD') || getRequiredEnv('EMAIL_APP_PASSWORD')).replace(/\s/g, '');
-    const host = getEnv('EMAIL_HOST', 'MAIL_HOST');
-    const port = Number(getEnv('EMAIL_PORT', 'MAIL_PORT') || 587);
-    const encryption = (getEnv('EMAIL_ENCRYPTION', 'MAIL_ENCRYPTION') || '').toLowerCase();
+    const sender = getEmailSender(body.senderId);
+    const { from, user, pass, host, port, encryption } = sender;
     const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();
     const publicBaseUrl = getPublicBaseUrl(request);
@@ -287,7 +303,8 @@ export async function POST(request: NextRequest) {
       const normalizedEmail = normalizeEmail(person.email);
       const blastGroupId = crypto.randomUUID();
       const services = getRecipientServices(person);
-      const email = buildEmail(person, blastGroupId, publicBaseUrl);
+      const campaignId = getSurveyScope(request);
+      const email = buildEmail(person, blastGroupId, publicBaseUrl, campaignId);
       const sentAt = new Date().toISOString();
       const duplicateSince = new Date(Date.now() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
       const records = services.map((serviceType) => ({
@@ -297,10 +314,13 @@ export async function POST(request: NextRequest) {
         person_name: person.name,
         whatsapp: person.whatsapp || '',
         email: normalizedEmail,
+        sender_id: sender.id,
+        sender_label: sender.label,
+        sender_email: sender.from,
         service_type: serviceType,
-        survey_link: getSurveyLink(publicBaseUrl, serviceType),
+        survey_link: getSurveyLink(publicBaseUrl, serviceType, campaignId),
         message: email.text,
-        campaign_id: getSurveyScope(request),
+        campaign_id: campaignId,
       }));
 
       try {
@@ -323,7 +343,7 @@ export async function POST(request: NextRequest) {
 
         if (duplicateError) throw duplicateError;
         const duplicateServices = ((duplicateRows ?? []) as Array<{ service_type: string; survey_link: string }>)
-          .filter((row) => row.survey_link === getSurveyLink(publicBaseUrl, row.service_type))
+          .filter((row) => row.survey_link === getSurveyLink(publicBaseUrl, row.service_type, campaignId))
           .map((row) => row.service_type);
         if (duplicateServices.length > 0) {
           const duplicateMessage = `Dilewati: email untuk layanan ini sudah dikirim/diproses dalam ${DUPLICATE_WINDOW_HOURS} jam terakhir (${duplicateServices}).`;
@@ -331,13 +351,11 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const { error: pendingInsertError } = await supabase.from('blast_records').insert(records.map((record) => ({
+        await insertBlastRows(supabase, records.map((record) => ({
           ...record,
           send_status: 'Pending',
           error: '',
         })));
-
-        if (pendingInsertError) throw pendingInsertError;
 
         const sendInfo = await sendMailWithRetry(transporter, {
           from: `"Survei Kepuasan Layanan" <${from}>`,
@@ -361,7 +379,7 @@ export async function POST(request: NextRequest) {
           sent_at: sentAt,
           })
           .eq('blast_group_id', blastGroupId)
-          .eq('campaign_id', getSurveyScope(request));
+          .eq('campaign_id', campaignId);
 
         if (updateError) throw updateError;
 
@@ -383,13 +401,16 @@ export async function POST(request: NextRequest) {
             error: errorMessage,
           })
           .eq('blast_group_id', blastGroupId)
-          .eq('campaign_id', getSurveyScope(request));
+          .eq('campaign_id', campaignId);
 
         results.push(records.map((record) => ({
           id: record.id,
           personName: person.name,
           email: normalizedEmail,
           whatsapp: person.whatsapp,
+          senderId: record.sender_id,
+          senderLabel: record.sender_label,
+          senderEmail: record.sender_email,
           serviceType: record.service_type,
           surveyLink: record.survey_link,
           message: email.text,

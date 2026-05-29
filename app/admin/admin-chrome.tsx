@@ -21,6 +21,7 @@ const defaultAdminActions: AdminAction[] = [
   { href: '/monitoring', label: 'Hasil Survey' },
   { href: '/blasting', label: 'Blasting' },
   { href: '/list', label: 'List Layanan' },
+  { href: '/work-units', label: 'Satuan Kerja' },
 ];
 
 export function AdminHeader({
