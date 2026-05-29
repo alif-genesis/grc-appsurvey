@@ -363,15 +363,14 @@ export default function HomePage() {
         <section className="panel guidance-panel">
           <div className="panel-title">PEDOMAN</div>
           <div className="panel-content">
-            <p>Survei Kepuasan Layanan akan menghasilkan Indeks Kepuasan Layanan Dukungan Manajemen yang merupakan Target Kinerja Pejabat Pimpinan Tinggi di Lingkungan Sekretariat Jenderal dan Kementerian.</p>
             <h2>Tata Cara Pengisian Survei:</h2>
             <ol>
-              <li>Pilih layanan yang pernah Anda terima melalui halaman daftar layanan atau tautan survei yang dikirimkan.</li>
-              <li>Pastikan kolom Jenis Layanan sudah sesuai dengan layanan yang akan dinilai sebelum mengisi survei.</li>
-              <li>Lengkapi profil, berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Submit]</strong>.</li>
-              <li>Jangka waktu pengisian survei adalah 1 Juni 2026 s.d. 30 Juni 2026.</li>
+              <li>Lengkapi Profil (Nama Lengkap, Asal Satker).</li>
+              <li>Survei terdiri atas dua survei; survei kepuasan layanan dan survei persepsi anti korupsi.</li>
+              <li>Seluruh kolom pada survei bersifat required (wajib diisi).</li>
+              <li>Berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Submit]</strong>.</li>
+              <li>Jangka waktu pengisian survei adalah 02 Juni 2026 s.d. 30 Juni 2026.</li>
             </ol>
-            <p className="note">Catatan: Responden wajib mengisi survei secara objektif. Partisipasi Anda dalam survei ini sangat berharga bagi kami.</p>
           </div>
 
           <div className="panel-title">PROFIL</div>

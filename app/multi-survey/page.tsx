@@ -308,14 +308,13 @@ export default function MultiSurveyPage() {
         <section className="panel guidance-panel">
           <div className="panel-title">PEDOMAN</div>
           <div className="panel-content">
-            <p>Anda menerima tautan survei untuk beberapa layanan. Lengkapi profil satu kali, lalu isi penilaian untuk setiap layanan yang tampil di halaman ini.</p>
             <h2>Tata Cara Pengisian Survei:</h2>
             <ol>
-              <li>Pastikan nama layanan pada setiap bagian sudah sesuai dengan layanan yang pernah Anda terima.</li>
-              <li>Lengkapi profil satu kali pada panel ini.</li>
-              <li>Isi seluruh pertanyaan pada setiap layanan yang tampil.</li>
-              <li>Klik <strong>[Submit]</strong> setelah seluruh layanan selesai dinilai.</li>
-              <li>Jangka waktu pengisian survei adalah 1 Juni 2026 s.d. 30 Juni 2026.</li>
+              <li>Lengkapi Profil (Nama Lengkap, Asal Satker).</li>
+              <li>Survei terdiri atas dua survei; survei kepuasan layanan dan survei persepsi anti korupsi.</li>
+              <li>Seluruh kolom pada survei bersifat required (wajib diisi).</li>
+              <li>Berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Submit]</strong>.</li>
+              <li>Jangka waktu pengisian survei adalah 02 Juni 2026 s.d. 30 Juni 2026.</li>
             </ol>
           </div>
 

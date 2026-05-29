@@ -23,6 +23,7 @@ const REQUEST_COOLDOWN_MS = 1000;
 let lastEmailBlastAt = 0;
 
 const FALLBACK_PUBLIC_APP_URL = 'https://survey.genetikasolusibisnis.co.id';
+const DIRJEN_SENDER_EMAIL = 'tu.dirjen_djed@mail.komdigi.go.id';
 
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -102,13 +103,51 @@ const getCampaignText = async (campaignId: string) => {
   }
 };
 
-const buildEmail = (person: EmailRecipient, blastGroupId: string, baseUrl: string, campaignId: string) => {
+const buildEmail = (
+  person: EmailRecipient,
+  blastGroupId: string,
+  baseUrl: string,
+  campaignId: string,
+  senderFrom: string,
+) => {
   const services = getRecipientServices(person);
   const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl, campaignId) : getSurveyLink(baseUrl, services[0], campaignId);
   const clickLink = getTrackingUrl(baseUrl, '/api/track/click', blastGroupId, surveyLink);
   const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
   const serviceListHtml = services.map((service) => `<li>${service}</li>`).join('');
+  const serviceDisplay = services.join(', ');
+
+  if (normalizeEmail(senderFrom) === DIRJEN_SENDER_EMAIL) {
+    const subject = `Survei Kepuasan Terhadap Layanan ${serviceDisplay} di Sekretariat dan Tata Usaha Direktorat Jenderal Ekosistem Digital`;
+    const text = [
+      'Yth. Pengguna Layanan Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital,',
+      '',
+      'Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada pegawai, Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.',
+      '',
+      'Kami mohon kesediaan Saudara/i/Bapak/Ibu untuk mengisi survei pada tautan/link survei berikut :',
+      `Link layanan terkait: ${surveyLink}`,
+      '',
+      'Saudara/i/Bapak/Ibu dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital pada tanggal 2 Juni s.d. 30 Juni 2026',
+      '',
+      'Partisipasi Saudara/i/Bapak/Ibu sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Ekosistem Digital',
+      '',
+      'Terima kasih.',
+    ].join('\n');
+    const html = `
+      <p>Yth. Pengguna Layanan Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital,</p>
+      <p>Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada pegawai, Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.</p>
+      <p>Kami mohon kesediaan Saudara/i/Bapak/Ibu untuk mengisi survei pada tautan/link survei berikut :</p>
+      <p>&#128206; <a href="${clickLink}">Link layanan terkait</a></p>
+      <p>Saudara/i/Bapak/Ibu dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital pada tanggal 2 Juni s.d. 30 Juni 2026</p>
+      <p>Partisipasi Saudara/i/Bapak/Ibu sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Ekosistem Digital</p>
+      <p>Terima kasih.</p>
+      <img src="${openPixel}" width="1" height="1" alt="" style="display:none" />
+    `;
+
+    return { subject, text, html, surveyLink, clickLink };
+  }
+
   const subject = 'Survei Kepuasan Layanan';
   const text = [
     `Yth. ${person.name},`,
@@ -316,7 +355,7 @@ export async function POST(request: NextRequest) {
       const blastGroupId = crypto.randomUUID();
       const services = getRecipientServices(person);
       const campaignId = getSurveyScope(request);
-      const email = buildEmail(person, blastGroupId, publicBaseUrl, campaignId);
+      const email = buildEmail(person, blastGroupId, publicBaseUrl, campaignId, sender.from);
       const sentAt = new Date().toISOString();
       const duplicateSince = new Date(Date.now() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
       const records = services.map((serviceType) => ({
