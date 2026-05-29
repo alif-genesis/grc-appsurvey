@@ -32,6 +32,12 @@ type SurveyDraft = {
   comments: string;
 };
 
+type SurveyContext = {
+  id: string;
+  name: string;
+  description: string;
+};
+
 type BlastContext = {
   blastId: string;
   blastGroupId: string;
@@ -49,16 +55,22 @@ const getCookieValue = (name: string) => {
 const getInitialBlastContext = (): BlastContext => {
   if (typeof window === 'undefined') return { blastId: '', blastGroupId: '' };
   const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const hashBlastId = hashParams.get('blastId')?.trim() || '';
+  const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
   const paramsBlastId = params.get('blastId')?.trim() || '';
-  if (paramsBlastId) {
+  if (paramsBlastId || hashBlastId || hashBlastGroupId) {
     params.delete('blastId');
+    hashParams.delete('blastId');
+    hashParams.delete('blastGroupId');
     const nextSearch = params.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`);
+    const nextHash = hashParams.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${nextHash ? `#${nextHash}` : ''}`);
   }
 
   return {
-    blastId: paramsBlastId || getCookieValue('genesis_blast_id'),
-    blastGroupId: paramsBlastId ? '' : getCookieValue('genesis_blast_group_id'),
+    blastId: paramsBlastId || hashBlastId || getCookieValue('genesis_blast_id'),
+    blastGroupId: paramsBlastId || hashBlastId ? '' : hashBlastGroupId || getCookieValue('genesis_blast_group_id'),
   };
 };
 
@@ -110,6 +122,11 @@ export default function HomePage() {
   const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
   const [hasSubmissionContext, setHasSubmissionContext] = useState(false);
   const [workUnits, setWorkUnits] = useState<string[]>(defaultWorkUnits);
+  const [surveyContext, setSurveyContext] = useState<SurveyContext>({
+    id: '',
+    name: '',
+    description: '',
+  });
   const [isDraftReady, setIsDraftReady] = useState(false);
   const allowNavigationRef = useRef(false);
   const draftKeyRef = useRef('');
@@ -181,9 +198,28 @@ export default function HomePage() {
       }
     };
 
+    const loadSurveyContext = async () => {
+      try {
+        const campaignId = getCampaignIdFromUrl();
+        const contextPath = campaignId
+          ? `/api/survey-context/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
+          : withBlastParams('/api/survey-context/', blastContext);
+        const response = await fetch(withBasePath(contextPath), { cache: 'no-store' });
+        const payload = await response.json() as { campaign?: SurveyContext };
+        if (payload.campaign?.name) setSurveyContext(payload.campaign);
+      } catch {
+        setSurveyContext((current) => current.name ? current : {
+          id: '',
+          name: 'Survey Kepuasan Layanan',
+          description: '',
+        });
+      }
+    };
+
     if (hasBlastContext(blastContext)) checkSubmission();
     if (!fallbackServiceType) resolveService();
     loadWorkUnits();
+    loadSurveyContext();
   }, []);
 
   useEffect(() => {
@@ -314,7 +350,7 @@ export default function HomePage() {
         <div className="brand-row">
           <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} decoding="async" />
           <div>
-            <p className="agency">Biro Hubungan Masyarakat</p>
+            <p className="agency">{surveyContext.name || 'Memuat survey...'}</p>
           </div>
         </div>
         <div className="title-block">

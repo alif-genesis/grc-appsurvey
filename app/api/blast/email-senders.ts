@@ -102,3 +102,23 @@ export const getPublicEmailSenders = () => (
     email: sender.from,
   }))
 );
+
+export const getSenderIdForCampaign = (campaignId: string, campaignText = '') => {
+  const normalized = `${campaignId} ${campaignText}`.toLowerCase();
+  if (normalized.includes('infrastruktur')) return 'sekretariat';
+  if (normalized.includes('ekosistem')) return 'dirjen';
+  return process.env.MAIL_DEFAULT_SENDER_ID?.trim() || 'sekretariat';
+};
+
+export const getEmailSenderForCampaign = (campaignId: string, campaignText = '') => (
+  getEmailSender(getSenderIdForCampaign(campaignId, campaignText))
+);
+
+export const getPublicEmailSenderForCampaign = (campaignId: string, campaignText = '') => {
+  const sender = getEmailSenderForCampaign(campaignId, campaignText);
+  return {
+    id: sender.id,
+    label: sender.label,
+    email: sender.from,
+  };
+};

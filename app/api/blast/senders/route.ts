@@ -1,8 +1,25 @@
-import { NextResponse } from 'next/server';
-import { getPublicEmailSenders } from '../email-senders';
+import { NextRequest, NextResponse } from 'next/server';
+import { getPublicEmailSenderForCampaign } from '../email-senders';
+import { getSupabase, getSurveyScope } from '../../../supabase-server';
 
-export async function GET() {
+const getCampaignText = async (campaignId: string) => {
+  try {
+    const { data } = await getSupabase()
+      .from('survey_campaigns')
+      .select('name, description')
+      .eq('id', campaignId)
+      .maybeSingle();
+    return `${data?.name || ''} ${data?.description || ''}`;
+  } catch {
+    return '';
+  }
+};
+
+export async function GET(request: NextRequest) {
+  const campaignId = getSurveyScope(request);
+  const sender = getPublicEmailSenderForCampaign(campaignId, await getCampaignText(campaignId));
   return NextResponse.json({
-    senders: getPublicEmailSenders(),
+    sender,
+    senders: [sender],
   });
 }

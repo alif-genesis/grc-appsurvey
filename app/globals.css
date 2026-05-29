@@ -1567,6 +1567,10 @@ select {
   background: #eff6ff;
 }
 
+.sender-choice-static {
+  cursor: default;
+}
+
 .sender-choice-check {
   display: inline-grid;
   place-items: center;

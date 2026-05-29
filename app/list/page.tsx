@@ -11,7 +11,11 @@ type ServiceItem = {
   active: boolean;
 };
 
-const getServiceUrl = (service: string) => withBasePath(`/${serviceToSlug(service)}?preview=1`);
+const getServiceUrl = (service: string, campaignId: string) => {
+  const params = new URLSearchParams({ preview: '1' });
+  if (campaignId) params.set('survey', campaignId);
+  return withBasePath(`/${serviceToSlug(service)}?${params.toString()}`);
+};
 
 const fallbackServices = serviceTypes.map((name, index) => ({
   id: `default-${index + 1}`,
@@ -26,6 +30,7 @@ export default function ServiceListPage() {
   const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState('');
   const [message, setMessage] = useState('Memuat daftar layanan...');
+  const [campaignId, setCampaignId] = useState('');
 
   const refreshServices = async () => {
     try {
@@ -33,6 +38,7 @@ export default function ServiceListPage() {
       const payload = await response.json() as { campaignId?: string; services?: ServiceItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
       setServices(payload.services ?? fallbackServices);
+      setCampaignId(payload.campaignId || '');
       setMessage(payload.warning || 'Daftar layanan tersinkron dari database.');
     } catch (error) {
       setServices(fallbackServices);
@@ -139,7 +145,7 @@ export default function ServiceListPage() {
             const isEditing = editingId === service.id;
             return (
               <div key={service.id} className="service-admin-item">
-                <a className="service-link-item" href={getServiceUrl(service.name)}>
+                <a className="service-link-item" href={getServiceUrl(service.name, campaignId)}>
                   <span className="service-link-number">{index + 1}</span>
                   <span className="service-link-content">
                     <strong>{service.name}</strong>

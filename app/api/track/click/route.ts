@@ -72,9 +72,15 @@ export async function GET(request: NextRequest) {
 
   const rows = data ?? [];
   const singleRow = rows.length === 1 ? rows[0] : null;
-  const redirectUrl = blastGroupId && rows.length > 1
-    ? new URL('/multi-survey', getRequestOrigin(request)).toString()
-    : getSafeRedirectUrl(request, singleRow?.survey_link || target);
+  const redirectTarget = blastGroupId && rows.length > 1
+    ? new URL('/multi-survey', getRequestOrigin(request))
+    : new URL(getSafeRedirectUrl(request, singleRow?.survey_link || target));
+  if (blastGroupId && rows.length > 1) {
+    redirectTarget.hash = `blastGroupId=${encodeURIComponent(blastGroupId)}`;
+  } else if (blastId || singleRow?.id) {
+    redirectTarget.hash = `blastId=${encodeURIComponent(blastId || singleRow?.id || '')}`;
+  }
+  const redirectUrl = redirectTarget.toString();
   const response = NextResponse.redirect(redirectUrl);
 
   if (blastGroupId) {

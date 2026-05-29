@@ -3,7 +3,7 @@ import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
 import { serviceToSlug } from '../../../services';
 import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
-import { getEmailSender } from '../email-senders';
+import { getEmailSenderForCampaign } from '../email-senders';
 
 type EmailRecipient = {
   name: string;
@@ -88,6 +88,19 @@ const getRecipientServices = (person: EmailRecipient) => (
 );
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const getCampaignText = async (campaignId: string) => {
+  try {
+    const { data } = await getSupabase()
+      .from('survey_campaigns')
+      .select('name, description')
+      .eq('id', campaignId)
+      .maybeSingle();
+    return `${data?.name || ''} ${data?.description || ''}`;
+  } catch {
+    return '';
+  }
+};
 
 const buildEmail = (person: EmailRecipient, blastGroupId: string, baseUrl: string, campaignId: string) => {
   const services = getRecipientServices(person);
@@ -246,7 +259,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sender = getEmailSender(body.senderId);
+    const activeCampaignId = getSurveyScope(request);
+    const sender = getEmailSenderForCampaign(activeCampaignId, await getCampaignText(activeCampaignId));
     const { from, user, pass, host, port, encryption } = sender;
     const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();

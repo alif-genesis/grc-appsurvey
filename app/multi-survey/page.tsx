@@ -43,6 +43,12 @@ type MultiSurveyDraft = {
   comments: Record<string, string>;
 };
 
+type SurveyContext = {
+  id: string;
+  name: string;
+  description: string;
+};
+
 const getDraftKey = (blastGroupId: string) => `${MULTI_SURVEY_DRAFT_PREFIX}:${blastGroupId}`;
 
 const loadDraft = (key: string) => loadJsonStorage<MultiSurveyDraft | null>(key, null);
@@ -63,12 +69,29 @@ const withBlastGroupParam = (path: string, blastGroupId: string) => {
   return `${path}${path.includes('?') ? '&' : '?'}blastGroupId=${encodeURIComponent(blastGroupId)}`;
 };
 
+const getInitialBlastGroupId = () => {
+  if (typeof window === 'undefined') return '';
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
+  if (hashBlastGroupId) {
+    hashParams.delete('blastGroupId');
+    const nextHash = hashParams.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`);
+  }
+  return hashBlastGroupId || getCookieValue('genesis_blast_group_id');
+};
+
 export default function MultiSurveyPage() {
   const [records, setRecords] = useState<GroupRecord[]>([]);
   const [profile, setProfile] = useState({ name: '', directorate: '' });
   const [responses, setResponses] = useState<Record<string, Record<string, string>>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [workUnits, setWorkUnits] = useState<string[]>(defaultWorkUnits);
+  const [surveyContext, setSurveyContext] = useState<SurveyContext>({
+    id: '',
+    name: '',
+    description: '',
+  });
   const [message, setMessage] = useState('Memuat daftar layanan...');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -79,7 +102,7 @@ export default function MultiSurveyPage() {
   const pendingRecords = records.filter((record) => !record.submittedAt);
 
   useEffect(() => {
-    const initialBlastGroupId = getCookieValue('genesis_blast_group_id');
+    const initialBlastGroupId = getInitialBlastGroupId();
     blastGroupIdRef.current = initialBlastGroupId;
 
     const loadWorkUnits = async (blastGroupId: string) => {
@@ -129,7 +152,22 @@ export default function MultiSurveyPage() {
       }
     };
 
+    const loadSurveyContext = async (blastGroupId: string) => {
+      try {
+        const response = await fetch(withBasePath(withBlastGroupParam('/api/survey-context/', blastGroupId)), { cache: 'no-store' });
+        const payload = await response.json() as { campaign?: SurveyContext };
+        if (payload.campaign?.name) setSurveyContext(payload.campaign);
+      } catch {
+        setSurveyContext((current) => current.name ? current : {
+          id: '',
+          name: 'Survey Kepuasan Layanan',
+          description: '',
+        });
+      }
+    };
+
     loadWorkUnits(initialBlastGroupId);
+    loadSurveyContext(initialBlastGroupId);
     loadGroup();
   }, []);
 
@@ -257,7 +295,7 @@ export default function MultiSurveyPage() {
         <div className="brand-row">
           <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} decoding="async" />
           <div>
-            <p className="agency">Biro Hubungan Masyarakat</p>
+            <p className="agency">{surveyContext.name || 'Memuat survey...'}</p>
           </div>
         </div>
         <div className="title-block">

@@ -204,11 +204,11 @@ export default function BlastingPage() {
   const loadEmailSenders = async () => {
     try {
       const response = await fetch(withBasePath('/api/blast/senders'), { cache: 'no-store' });
-      const payload = await response.json() as { senders?: EmailSender[]; error?: string };
+      const payload = await response.json() as { sender?: EmailSender; senders?: EmailSender[]; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar sender.');
-      const senders = payload.senders ?? [];
+      const senders = payload.sender ? [payload.sender] : payload.senders ?? [];
       setEmailSenders(senders);
-      setSelectedSenderId((current) => (senders.some((sender) => sender.id === current) ? current : ''));
+      setSelectedSenderId(senders[0]?.id || '');
     } catch (error) {
       setEmailSenders([]);
       setSelectedSenderId('');
@@ -735,16 +735,14 @@ export default function BlastingPage() {
           {emailSenders.length === 0 ? (
             <p className="sender-empty-state">Sender belum dikonfigurasi.</p>
           ) : emailSenders.map((sender) => {
-            const isSelected = selectedSenderId === sender.id;
             return (
               <button
                 key={sender.id}
                 type="button"
-                className={`sender-choice ${isSelected ? 'is-selected' : ''}`}
-                onClick={() => setSelectedSenderId(sender.id)}
-                aria-pressed={isSelected}
+                className="sender-choice is-selected sender-choice-static"
+                aria-pressed="true"
               >
-                <span className="sender-choice-check">{isSelected ? '✓' : ''}</span>
+                <span className="sender-choice-check">✓</span>
                 <span>
                   <strong>{sender.label}</strong>
                   <small>{sender.email}</small>
