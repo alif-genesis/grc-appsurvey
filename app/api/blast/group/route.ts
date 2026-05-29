@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../supabase-server';
@@ -13,9 +14,9 @@ type BlastGroupRow = {
   submitted_at: string | null;
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
-  const blastGroupId = cookieStore.get('genesis_blast_group_id')?.value;
+  const blastGroupId = request.nextUrl.searchParams.get('blastGroupId')?.trim() || cookieStore.get('genesis_blast_group_id')?.value;
 
   if (!blastGroupId) {
     return NextResponse.json({ error: 'Link survei multi layanan tidak ditemukan.' }, { status: 404 });

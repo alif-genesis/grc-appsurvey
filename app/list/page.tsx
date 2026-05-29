@@ -29,7 +29,7 @@ export default function ServiceListPage() {
 
   const refreshServices = async () => {
     try {
-      const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+      const response = await fetch(withBasePath('/api/services/?admin=1'), { cache: 'no-store' });
       const payload = await response.json() as { campaignId?: string; services?: ServiceItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
       setServices(payload.services ?? fallbackServices);

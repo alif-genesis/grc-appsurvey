@@ -28,7 +28,7 @@ export default function WorkUnitListPage() {
 
   const refreshWorkUnits = async () => {
     try {
-      const response = await fetch(withBasePath('/api/work-units/'), { cache: 'no-store' });
+      const response = await fetch(withBasePath('/api/work-units/?admin=1'), { cache: 'no-store' });
       const payload = await response.json() as { workUnits?: WorkUnitItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar satuan kerja.');
       setWorkUnits(payload.workUnits ?? fallbackWorkUnits);

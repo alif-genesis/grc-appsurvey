@@ -208,7 +208,7 @@ export default function BlastingPage() {
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar sender.');
       const senders = payload.senders ?? [];
       setEmailSenders(senders);
-      setSelectedSenderId((current) => current || senders[0]?.id || '');
+      setSelectedSenderId((current) => (senders.some((sender) => sender.id === current) ? current : ''));
     } catch (error) {
       setEmailSenders([]);
       setSelectedSenderId('');
@@ -731,17 +731,27 @@ export default function BlastingPage() {
           <h2>Sender Email</h2>
           <button type="button" className="text-button" onClick={loadEmailSenders}>Refresh</button>
         </div>
-        <div className="filter-row">
-          <label>
-            Pengirim Email
-            <select value={selectedSenderId} onChange={(event) => setSelectedSenderId(event.target.value)}>
-              {emailSenders.length === 0 ? (
-                <option value="">Sender belum dikonfigurasi</option>
-              ) : emailSenders.map((sender) => (
-                <option key={sender.id} value={sender.id}>{sender.label} - {sender.email}</option>
-              ))}
-            </select>
-          </label>
+        <div className="sender-picker">
+          {emailSenders.length === 0 ? (
+            <p className="sender-empty-state">Sender belum dikonfigurasi.</p>
+          ) : emailSenders.map((sender) => {
+            const isSelected = selectedSenderId === sender.id;
+            return (
+              <button
+                key={sender.id}
+                type="button"
+                className={`sender-choice ${isSelected ? 'is-selected' : ''}`}
+                onClick={() => setSelectedSenderId(sender.id)}
+                aria-pressed={isSelected}
+              >
+                <span className="sender-choice-check">{isSelected ? '✓' : ''}</span>
+                <span>
+                  <strong>{sender.label}</strong>
+                  <small>{sender.email}</small>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -963,7 +973,7 @@ export default function BlastingPage() {
           }
         >
           <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
-          <small>{blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch {MAX_EMAIL_RECIPIENTS} orang</small>
+          <small>{selectedSenderId ? `${blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch ${MAX_EMAIL_RECIPIENTS} orang` : 'Pilih sender email terlebih dahulu'}</small>
         </button>
         <button
           type="button"

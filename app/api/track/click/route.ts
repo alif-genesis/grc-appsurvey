@@ -88,6 +88,13 @@ export async function GET(request: NextRequest) {
   }
 
   if (blastId) {
+    response.cookies.set('genesis_blast_group_id', '', {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      path: '/',
+      maxAge: 0,
+    });
     response.cookies.set('genesis_blast_id', blastId, {
       httpOnly: false,
       sameSite: 'lax',

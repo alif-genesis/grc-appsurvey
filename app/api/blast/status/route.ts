@@ -1,11 +1,12 @@
+import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../supabase-server';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
-  const blastId = cookieStore.get('genesis_blast_id')?.value;
-  const blastGroupId = cookieStore.get('genesis_blast_group_id')?.value;
+  const blastId = request.nextUrl.searchParams.get('blastId')?.trim() || cookieStore.get('genesis_blast_id')?.value;
+  const blastGroupId = request.nextUrl.searchParams.get('blastGroupId')?.trim() || cookieStore.get('genesis_blast_group_id')?.value;
 
   if (!blastId && !blastGroupId) {
     return NextResponse.json({ submitted: false });

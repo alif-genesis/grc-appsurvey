@@ -49,6 +49,20 @@ const loadDraft = (key: string) => loadJsonStorage<MultiSurveyDraft | null>(key,
 const saveDraft = (key: string, draft: MultiSurveyDraft) => saveJsonStorage(key, draft);
 const clearDraft = (key: string) => removeStorageItem(key);
 
+const getCookieValue = (name: string) => {
+  if (typeof document === 'undefined') return '';
+  const value = document.cookie
+    .split('; ')
+    .find((cookie) => cookie.startsWith(`${name}=`))
+    ?.split('=')[1];
+  return value ? decodeURIComponent(value) : '';
+};
+
+const withBlastGroupParam = (path: string, blastGroupId: string) => {
+  if (!blastGroupId) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}blastGroupId=${encodeURIComponent(blastGroupId)}`;
+};
+
 export default function MultiSurveyPage() {
   const [records, setRecords] = useState<GroupRecord[]>([]);
   const [profile, setProfile] = useState({ name: '', directorate: '' });
@@ -61,12 +75,16 @@ export default function MultiSurveyPage() {
   const [isDraftReady, setIsDraftReady] = useState(false);
   const allowNavigationRef = useRef(false);
   const draftKeyRef = useRef('');
+  const blastGroupIdRef = useRef('');
   const pendingRecords = records.filter((record) => !record.submittedAt);
 
   useEffect(() => {
-    const loadWorkUnits = async () => {
+    const initialBlastGroupId = getCookieValue('genesis_blast_group_id');
+    blastGroupIdRef.current = initialBlastGroupId;
+
+    const loadWorkUnits = async (blastGroupId: string) => {
       try {
-        const response = await fetch(withBasePath('/api/work-units/'), { cache: 'no-store' });
+        const response = await fetch(withBasePath(withBlastGroupParam('/api/work-units/', blastGroupId)), { cache: 'no-store' });
         const payload = await response.json() as { workUnits?: Array<{ name: string }> };
         const names = payload.workUnits?.map((workUnit) => workUnit.name).filter(Boolean) ?? defaultWorkUnits;
         setWorkUnits(names.length ? names : defaultWorkUnits);
@@ -77,7 +95,7 @@ export default function MultiSurveyPage() {
 
     const loadGroup = async () => {
       try {
-        const response = await fetch(withBasePath('/api/blast/group'), { cache: 'no-store' });
+        const response = await fetch(withBasePath(withBlastGroupParam('/api/blast/group', initialBlastGroupId)), { cache: 'no-store' });
         const payload = await response.json() as { records?: GroupRecord[]; error?: string };
 
         if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
@@ -111,7 +129,7 @@ export default function MultiSurveyPage() {
       }
     };
 
-    loadWorkUnits();
+    loadWorkUnits(initialBlastGroupId);
     loadGroup();
   }, []);
 

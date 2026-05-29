@@ -34,24 +34,25 @@ const getWorkUnitCampaignId = async (request: NextRequest) => {
   const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
   if (requestedScope) return requestedScope;
 
+  const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
   const adminScope = request.cookies.get(ADMIN_SURVEY_COOKIE)?.value;
-  if (adminScope) return adminScope;
+  if (adminOnly && adminScope) return adminScope;
 
-  const blastId = request.cookies.get('genesis_blast_id')?.value;
-  const blastGroupId = request.cookies.get('genesis_blast_group_id')?.value;
-  if (!blastId && !blastGroupId) return getSurveyScope(request);
+  const blastId = request.nextUrl.searchParams.get('blastId')?.trim() || request.cookies.get('genesis_blast_id')?.value;
+  const blastGroupId = request.nextUrl.searchParams.get('blastGroupId')?.trim() || request.cookies.get('genesis_blast_group_id')?.value;
+  if (!blastId && !blastGroupId) return adminScope || getSurveyScope(request);
 
   const supabase = getSupabase();
   const query = supabase
     .from('blast_records')
     .select('campaign_id')
     .limit(1);
-  const { data, error } = blastGroupId
-    ? await query.eq('blast_group_id', blastGroupId)
-    : await query.eq('id', blastId);
+  const { data, error } = blastId
+    ? await query.eq('id', blastId)
+    : await query.eq('blast_group_id', blastGroupId);
 
   if (error) throw error;
-  return data?.[0]?.campaign_id || getSurveyScope(request);
+  return data?.[0]?.campaign_id || adminScope || getSurveyScope(request);
 };
 
 export async function GET(request: NextRequest) {

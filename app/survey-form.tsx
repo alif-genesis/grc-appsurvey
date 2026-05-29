@@ -32,54 +32,63 @@ type SurveyDraft = {
   comments: string;
 };
 
-const getDraftKey = () => {
+type BlastContext = {
+  blastId: string;
+  blastGroupId: string;
+};
+
+const getCookieValue = (name: string) => {
+  if (typeof document === 'undefined') return '';
+  const value = document.cookie
+    .split('; ')
+    .find((cookie) => cookie.startsWith(`${name}=`))
+    ?.split('=')[1];
+  return value ? decodeURIComponent(value) : '';
+};
+
+const getInitialBlastContext = (): BlastContext => {
+  if (typeof window === 'undefined') return { blastId: '', blastGroupId: '' };
+  const params = new URLSearchParams(window.location.search);
+  const paramsBlastId = params.get('blastId')?.trim() || '';
+  if (paramsBlastId) {
+    params.delete('blastId');
+    const nextSearch = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`);
+  }
+
+  return {
+    blastId: paramsBlastId || getCookieValue('genesis_blast_id'),
+    blastGroupId: paramsBlastId ? '' : getCookieValue('genesis_blast_group_id'),
+  };
+};
+
+const getDraftKey = (blastContext: BlastContext) => {
   if (typeof window === 'undefined') return '';
   const campaignId = getCampaignIdFromUrl();
-  const blastId = getBlastIdFromUrl();
   const pathKey = window.location.pathname.replace(/^\/+|\/+$/g, '') || 'home';
-  return `${SURVEY_DRAFT_PREFIX}:${campaignId || 'default'}:${blastId || pathKey}`;
+  return `${SURVEY_DRAFT_PREFIX}:${campaignId || 'default'}:${blastContext.blastId || blastContext.blastGroupId || pathKey}`;
 };
 
 const loadSurveyDraft = (key: string) => loadJsonStorage<SurveyDraft | null>(key, null);
 const saveSurveyDraft = (key: string, draft: SurveyDraft) => saveJsonStorage(key, draft);
 const clearSurveyDraft = (key: string) => removeStorageItem(key);
 
-const getBlastIdFromUrl = () => {
-  if (typeof window === 'undefined') return '';
-  const paramsBlastId = new URLSearchParams(window.location.search).get('blastId');
-  if (paramsBlastId) {
-    const params = new URLSearchParams(window.location.search);
-    params.delete('blastId');
-    const nextSearch = params.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`);
-    return paramsBlastId;
-  }
-
-  const cookieBlastId = document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('genesis_blast_id='))
-    ?.split('=')[1];
-
-  return cookieBlastId ? decodeURIComponent(cookieBlastId) : '';
-};
-
 const getCampaignIdFromUrl = () => {
   if (typeof window === 'undefined') return '';
   return new URLSearchParams(window.location.search).get(SURVEY_QUERY_PARAM)?.trim() || '';
 };
 
-const hasBlastContext = () => {
-  if (typeof window === 'undefined') return false;
-  return Boolean(
-    new URLSearchParams(window.location.search).get('blastId')
-    || document.cookie.split('; ').some((cookie) => (
-      cookie.startsWith('genesis_blast_id=')
-      || cookie.startsWith('genesis_blast_group_id=')
-    )),
-  );
-};
+const hasBlastContext = (blastContext: BlastContext) => Boolean(blastContext.blastId || blastContext.blastGroupId);
 
-const hasSubmitContext = () => hasBlastContext() || Boolean(getCampaignIdFromUrl());
+const hasSubmitContext = (blastContext: BlastContext) => hasBlastContext(blastContext) || Boolean(getCampaignIdFromUrl());
+
+const withBlastParams = (path: string, blastContext: BlastContext) => {
+  const params = new URLSearchParams();
+  if (blastContext.blastId) params.set('blastId', blastContext.blastId);
+  if (blastContext.blastGroupId) params.set('blastGroupId', blastContext.blastGroupId);
+  const query = params.toString();
+  return query ? `${path}${path.includes('?') ? '&' : '?'}${query}` : path;
+};
 
 export default function HomePage() {
   const [profile, setProfile] = useState({
@@ -99,11 +108,14 @@ export default function HomePage() {
   const [isDraftReady, setIsDraftReady] = useState(false);
   const allowNavigationRef = useRef(false);
   const draftKeyRef = useRef('');
+  const blastContextRef = useRef<BlastContext>({ blastId: '', blastGroupId: '' });
 
   useEffect(() => {
-    setHasSubmissionContext(hasSubmitContext());
+    const blastContext = getInitialBlastContext();
+    blastContextRef.current = blastContext;
+    setHasSubmissionContext(hasSubmitContext(blastContext));
     const fallbackServiceType = getServiceFromPath(window.location.pathname);
-    const draftKey = getDraftKey();
+    const draftKey = getDraftKey(blastContext);
     const draft = loadSurveyDraft(draftKey);
     draftKeyRef.current = draftKey;
     setProfile((current) => ({
@@ -119,7 +131,7 @@ export default function HomePage() {
 
     const checkSubmission = async () => {
       try {
-        const response = await fetch(withBasePath('/api/blast/status'), { cache: 'no-store' });
+        const response = await fetch(withBasePath(withBlastParams('/api/blast/status', blastContext)), { cache: 'no-store' });
         const payload = await response.json() as { submitted?: boolean; error?: string };
 
         if (response.ok && payload.submitted) {
@@ -138,7 +150,7 @@ export default function HomePage() {
         const campaignId = getCampaignIdFromUrl();
         const servicesPath = campaignId
           ? `/api/services/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
-          : '/api/services/';
+          : withBlastParams('/api/services/', blastContext);
         const response = await fetch(withBasePath(servicesPath), { cache: 'no-store' });
         const payload = await response.json() as { services?: Array<{ name: string }> };
         const availableServices = payload.services?.map((service) => service.name).filter(Boolean) ?? serviceTypes;
@@ -154,7 +166,7 @@ export default function HomePage() {
         const campaignId = getCampaignIdFromUrl();
         const workUnitsPath = campaignId
           ? `/api/work-units/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
-          : '/api/work-units/';
+          : withBlastParams('/api/work-units/', blastContext);
         const response = await fetch(withBasePath(workUnitsPath), { cache: 'no-store' });
         const payload = await response.json() as { workUnits?: Array<{ name: string }> };
         const names = payload.workUnits?.map((workUnit) => workUnit.name).filter(Boolean) ?? defaultWorkUnits;
@@ -164,7 +176,7 @@ export default function HomePage() {
       }
     };
 
-    if (hasBlastContext()) checkSubmission();
+    if (hasBlastContext(blastContext)) checkSubmission();
     if (!fallbackServiceType) resolveService();
     loadWorkUnits();
   }, []);
@@ -246,7 +258,8 @@ export default function HomePage() {
       responses,
       comments,
       campaignId: getCampaignIdFromUrl() || undefined,
-      blastId: getBlastIdFromUrl() || undefined,
+      blastId: blastContextRef.current.blastId || undefined,
+      blastGroupId: blastContextRef.current.blastGroupId || undefined,
     };
 
     try {
