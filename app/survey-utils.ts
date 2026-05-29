@@ -59,11 +59,12 @@ export const readErrorResponse = async (response: Response, fallback = 'Survey g
 
 export const getServiceCommentPrompt = (serviceType?: string) => {
   const serviceName = serviceType?.trim().replace(/^layanan\s+/i, '');
+  const basePrompt = 'Kritik, saran, atau masukan (dapat meliputi Standar Operasional Pelayanan, SDM Pelayanan, Transparansi & Kepastian, serta Sarana Pendukung)';
   if (!serviceName) {
-    return 'Apabila terdapat kritik, saran, atau masukan dapat disampaikan melalui kolom di bawah ini';
+    return `${basePrompt} dapat disampaikan melalui kolom di bawah ini`;
   }
 
-  return `Apabila terdapat kritik, saran, atau masukan untuk layanan ${serviceName} dapat disampaikan melalui kolom di bawah ini`;
+  return `${basePrompt} untuk layanan ${serviceName} dapat disampaikan melalui kolom di bawah ini`;
 };
 
 type ValidationInput = {
