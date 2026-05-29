@@ -11,7 +11,7 @@ type ServiceItem = {
   active: boolean;
 };
 
-const getServiceUrl = (service: string) => withBasePath(`/${serviceToSlug(service)}`);
+const getServiceUrl = (service: string) => withBasePath(`/${serviceToSlug(service)}?preview=1`);
 
 const fallbackServices = serviceTypes.map((name, index) => ({
   id: `default-${index + 1}`,

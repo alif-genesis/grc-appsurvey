@@ -177,11 +177,6 @@ const buildResultRows = (
   sentAt,
 }));
 
-const stripSenderColumns = <T extends Record<string, unknown>>(record: T) => {
-  const { sender_id, sender_label, sender_email, ...rest } = record;
-  return rest;
-};
-
 const insertBlastRows = async (
   supabase: ReturnType<typeof getSupabase>,
   rows: Record<string, unknown>[],
@@ -189,9 +184,12 @@ const insertBlastRows = async (
   const { error } = await supabase.from('blast_records').insert(rows);
   if (!error) return;
 
-  const legacyRows = rows.map(stripSenderColumns);
-  const { error: legacyError } = await supabase.from('blast_records').insert(legacyRows);
-  if (legacyError) throw error;
+  const message = formatServerError(error, 'Gagal menyimpan riwayat blast.');
+  if (message.includes('sender_id') || message.includes('sender_label') || message.includes('sender_email')) {
+    throw new Error('Kolom sender di Supabase belum tersedia. Jalankan migrasi sender blast_records terlebih dahulu.');
+  }
+
+  throw error;
 };
 
 const insertFailedRecords = async (

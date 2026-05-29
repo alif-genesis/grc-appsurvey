@@ -78,9 +78,14 @@ const getCampaignIdFromUrl = () => {
   return new URLSearchParams(window.location.search).get(SURVEY_QUERY_PARAM)?.trim() || '';
 };
 
+const isPreviewMode = () => {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('preview') === '1';
+};
+
 const hasBlastContext = (blastContext: BlastContext) => Boolean(blastContext.blastId || blastContext.blastGroupId);
 
-const hasSubmitContext = (blastContext: BlastContext) => hasBlastContext(blastContext) || Boolean(getCampaignIdFromUrl());
+const hasSubmitContext = (blastContext: BlastContext) => !isPreviewMode() && (hasBlastContext(blastContext) || Boolean(getCampaignIdFromUrl()));
 
 const withBlastParams = (path: string, blastContext: BlastContext) => {
   const params = new URLSearchParams();
