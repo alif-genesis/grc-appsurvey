@@ -218,7 +218,7 @@ export default function BlastingPage() {
 
   const loadServices = async () => {
     try {
-      const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+      const response = await fetch(withBasePath('/api/services/?admin=1'), { cache: 'no-store' });
       const payload = await response.json() as { campaignId?: string; services?: Array<{ name: string }> };
       setActiveCampaignId(payload.campaignId || '');
       const names = payload.services?.map((service) => service.name).filter(Boolean);

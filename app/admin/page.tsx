@@ -80,7 +80,7 @@ export default function AdminPage() {
 
     const loadServices = async () => {
       try {
-        const response = await fetch(withBasePath('/api/services/'), { cache: 'no-store' });
+        const response = await fetch(withBasePath('/api/services/?admin=1'), { cache: 'no-store' });
         const payload = await response.json() as { services?: Array<{ name: string }> };
         const names = payload.services?.map((service) => service.name).filter(Boolean);
         if (names) setAvailableServices(names);
