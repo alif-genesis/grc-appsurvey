@@ -23,6 +23,7 @@ let lastEmailBlastAt = 0;
 
 const FALLBACK_PUBLIC_APP_URL = 'https://survey.genetikasolusibisnis.co.id';
 const DIRJEN_SENDER_EMAIL = 'tu.dirjen_djed@mail.komdigi.go.id';
+const INFRASTRUKTUR_SENDER_EMAIL = 'tusesdjid@mail.komdigi.go.id';
 
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -125,6 +126,40 @@ const buildEmail = (
   const safeSurveyLink = escapeHtml(surveyLink);
   const safeClickLink = escapeHtml(clickLink);
   const safeOpenPixel = escapeHtml(openPixel);
+
+  if (normalizeEmail(senderFrom) === INFRASTRUKTUR_SENDER_EMAIL) {
+    const subject = 'Survei Kepuasan Layanan Infrastruktur Digital';
+    const text = [
+      `Yth. Bpk/Ibu ${person.name}`,
+      '',
+      'Dengan hormat,',
+      '',
+      'Menindaklanjuti Nota Dinas Sesditjen Infrastruktur Digital No...tanggal...tentang Pelaksanaan Survei Layanan Kesekretariatan, mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:',
+      '',
+      serviceListText,
+      '',
+      'Tautan survei:',
+      '',
+      clickLink,
+      '',
+      'Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.',
+      '',
+      'Terima kasih.',
+    ].join('\n');
+    const html = `
+      <p>Yth. Bpk/Ibu ${safeName}</p>
+      <p>Dengan hormat,</p>
+      <p>Menindaklanjuti Nota Dinas Sesditjen Infrastruktur Digital No...tanggal...tentang Pelaksanaan Survei Layanan Kesekretariatan, mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:</p>
+      <p>${services.map(escapeHtml).join('<br />')}</p>
+      <p>Tautan survei:</p>
+      <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
+      <p>Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.</p>
+      <p>Terima kasih.</p>
+      <img src="${safeOpenPixel}" width="1" height="1" alt="" style="display:none" />
+    `;
+
+    return { subject, text, html, surveyLink, clickLink };
+  }
 
   if (normalizeEmail(senderFrom) === DIRJEN_SENDER_EMAIL) {
     const subject = 'Survei Kepuasan di Sekretariat dan Tata Usaha Direktorat Jenderal Ekosistem Digital';
