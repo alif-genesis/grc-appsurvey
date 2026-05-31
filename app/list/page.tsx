@@ -30,6 +30,29 @@ const getImportValue = (row: Record<string, unknown>, aliases: string[]) => {
   return match ? String(match[1] ?? '').trim() : '';
 };
 
+const normalizeExcelRows = (rawRows: unknown) => {
+  if (!Array.isArray(rawRows)) {
+    throw new Error('Format Excel tidak valid.');
+  }
+
+  if (rawRows.length === 0) return [];
+
+  if (rawRows.every((row) => row && !Array.isArray(row) && typeof row === 'object')) {
+    return rawRows as Record<string, unknown>[];
+  }
+
+  if (!rawRows.every(Array.isArray)) {
+    throw new Error('Format baris Excel tidak valid.');
+  }
+
+  const [headerRow, ...bodyRows] = rawRows as unknown[][];
+  const headers = headerRow.map((cell) => String(cell ?? '').trim());
+  return bodyRows.map((cells) => headers.reduce<Record<string, unknown>>((acc, header, index) => {
+    acc[header || `Kolom ${index + 1}`] = cells[index] ?? '';
+    return acc;
+  }, {}));
+};
+
 export default function ServiceListPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [newService, setNewService] = useState('');
@@ -134,12 +157,7 @@ export default function ServiceListPage() {
 
     try {
       const { default: readSheet } = await import('read-excel-file/browser');
-      const excelRows = (await readSheet(file) as unknown) as unknown[][];
-      const headers = (excelRows[0] ?? []).map((cell) => String(cell ?? '').trim());
-      const rows = excelRows.slice(1).map((cells) => headers.reduce<Record<string, unknown>>((acc, header, index) => {
-        acc[header] = cells[index] ?? '';
-        return acc;
-      }, {}));
+      const rows = normalizeExcelRows(await readSheet(file));
       const existingNames = new Set(services.map((service) => service.name.trim().toLowerCase()));
       const seenNames = new Set<string>();
       const parsedRows = rows.map((row, index) => {
