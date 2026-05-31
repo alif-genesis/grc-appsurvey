@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const campaignId = await getServiceCampaignId(request);
+    const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
     let query = supabase
       .from('service_catalog')
       .select('id, created_at, updated_at, name, sort_order, active')
@@ -78,15 +79,16 @@ export async function GET(request: NextRequest) {
     const services = (data as ServiceRow[]).map(mapServiceRow);
     return NextResponse.json({
       campaignId,
-      services: services.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? services : fallbackServices(),
+      services: adminOnly || services.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? services : fallbackServices(),
     });
   } catch (error) {
     const campaignId = getRequestedSurveyScope(request);
     const isDefaultCampaign = campaignId === DEFAULT_SURVEY_CAMPAIGN_ID;
+    const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
     return NextResponse.json({
       campaignId,
-      services: isDefaultCampaign ? fallbackServices() : [],
-      warning: formatServerError(error, 'Menggunakan daftar layanan bawaan.'),
+      services: !adminOnly && isDefaultCampaign ? fallbackServices() : [],
+      warning: formatServerError(error, adminOnly ? 'Gagal mengambil daftar layanan.' : 'Menggunakan daftar layanan bawaan.'),
     });
   }
 }
@@ -106,6 +108,32 @@ export async function POST(request: NextRequest) {
       .limit(1);
     const { data: maxData } = await scopeFilter(maxQuery, true, request);
     const nextSortOrder = ((maxData?.[0]?.sort_order as number | undefined) ?? 0) + 1;
+
+    const existingQuery = supabase
+      .from('service_catalog')
+      .select('id, created_at, updated_at, name, sort_order, active')
+      .eq('name', name)
+      .eq('active', false)
+      .limit(1);
+    const { data: existingData, error: existingError } = await scopeFilter(existingQuery, true, request);
+    if (existingError) throw existingError;
+
+    const existingService = existingData?.[0] as ServiceRow | undefined;
+    if (existingService) {
+      const reactivateQuery = supabase
+        .from('service_catalog')
+        .update({
+          active: true,
+          sort_order: nextSortOrder,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingService.id)
+        .select('id, created_at, updated_at, name, sort_order, active');
+      const { data: reactivatedData, error: reactivateError } = await scopeFilter(reactivateQuery, true, request).single();
+      if (reactivateError) throw reactivateError;
+
+      return NextResponse.json({ service: mapServiceRow(reactivatedData as ServiceRow) });
+    }
 
     const { data, error } = await supabase
       .from('service_catalog')

@@ -68,7 +68,6 @@ create table if not exists public.blast_records (
   created_at timestamptz not null default now(),
   channel text not null,
   person_name text not null,
-  whatsapp text not null default '',
   email text not null default '',
   service_type text not null,
   survey_link text not null,
@@ -130,7 +129,6 @@ create table if not exists public.blast_people (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   name text not null,
-  whatsapp text not null default '',
   email text not null default '',
   service_types jsonb not null default '[]'::jsonb
 );

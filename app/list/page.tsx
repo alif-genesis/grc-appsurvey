@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { serviceToSlug, serviceTypes, withBasePath } from '../services';
+import { serviceToSlug, withBasePath } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type ServiceItem = {
@@ -11,38 +11,50 @@ type ServiceItem = {
   active: boolean;
 };
 
+type ImportService = {
+  rowNumber: number;
+  name: string;
+};
+
 const getServiceUrl = (service: string, campaignId: string) => {
   const params = new URLSearchParams({ preview: '1' });
   if (campaignId) params.set('survey', campaignId);
   return withBasePath(`/${serviceToSlug(service)}?${params.toString()}`);
 };
 
-const fallbackServices = serviceTypes.map((name, index) => ({
-  id: `default-${index + 1}`,
-  name,
-  sortOrder: index + 1,
-  active: true,
-}));
+const normalizeColumnName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const getImportValue = (row: Record<string, unknown>, aliases: string[]) => {
+  const aliasSet = new Set(aliases.map(normalizeColumnName));
+  const match = Object.entries(row).find(([key]) => aliasSet.has(normalizeColumnName(key)));
+  return match ? String(match[1] ?? '').trim() : '';
+};
 
 export default function ServiceListPage() {
-  const [services, setServices] = useState<ServiceItem[]>(fallbackServices);
+  const [services, setServices] = useState<ServiceItem[]>([]);
   const [newService, setNewService] = useState('');
   const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState('');
   const [message, setMessage] = useState('Memuat daftar layanan...');
   const [campaignId, setCampaignId] = useState('');
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<ImportService[]>([]);
+  const [importFileName, setImportFileName] = useState('');
+  const [importMessage, setImportMessage] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [deletingServiceIds, setDeletingServiceIds] = useState<string[]>([]);
 
   const refreshServices = async () => {
     try {
       const response = await fetch(withBasePath('/api/services/?admin=1'), { cache: 'no-store' });
       const payload = await response.json() as { campaignId?: string; services?: ServiceItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar layanan.');
-      setServices(payload.services ?? fallbackServices);
+      setServices(payload.services ?? []);
       setCampaignId(payload.campaignId || '');
       setMessage(payload.warning || 'Daftar layanan tersinkron dari database.');
     } catch (error) {
-      setServices(fallbackServices);
-      setMessage(error instanceof Error ? error.message : 'Menggunakan daftar layanan bawaan.');
+      setServices([]);
+      setMessage(error instanceof Error ? error.message : 'Gagal mengambil daftar layanan.');
     }
   };
 
@@ -93,15 +105,109 @@ export default function ServiceListPage() {
   };
 
   const deleteService = async (service: ServiceItem) => {
+    if (deletingServiceIds.includes(service.id)) return;
+    setDeletingServiceIds((current) => [...current, service.id]);
     try {
-      const response = await fetch(withBasePath(`/api/services/${service.id}/`), { method: 'DELETE' });
+      setMessage(`Menghapus layanan "${service.name}"...`);
+      const response = await fetch(withBasePath(`/api/services/${service.id}/`), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: service.name }),
+      });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal menghapus layanan.');
       setServices((current) => current.filter((item) => item.id !== service.id));
       setMessage('Layanan berhasil dihapus.');
+      await refreshServices();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Gagal menghapus layanan.');
+    } finally {
+      setDeletingServiceIds((current) => current.filter((id) => id !== service.id));
     }
+  };
+
+  const handleImportFile = async (file?: File | null) => {
+    if (!file) return;
+
+    setImportFileName(file.name);
+    setImportMessage('');
+
+    try {
+      const { default: readSheet } = await import('read-excel-file/browser');
+      const excelRows = (await readSheet(file) as unknown) as unknown[][];
+      const headers = (excelRows[0] ?? []).map((cell) => String(cell ?? '').trim());
+      const rows = excelRows.slice(1).map((cells) => headers.reduce<Record<string, unknown>>((acc, header, index) => {
+        acc[header] = cells[index] ?? '';
+        return acc;
+      }, {}));
+      const existingNames = new Set(services.map((service) => service.name.trim().toLowerCase()));
+      const seenNames = new Set<string>();
+      const parsedRows = rows.map((row, index) => {
+        const name = getImportValue(row, ['layanan', 'nama layanan', 'namalayanan', 'service']);
+        return { rowNumber: index + 2, name };
+      }).filter((row) => {
+        const key = row.name.trim().toLowerCase();
+        if (!key || seenNames.has(key) || existingNames.has(key)) return false;
+        seenNames.add(key);
+        return true;
+      });
+
+      setImportRows(parsedRows);
+      setImportMessage(`${parsedRows.length} layanan baru siap diimport dari ${rows.length} baris Excel.`);
+    } catch (error) {
+      setImportRows([]);
+      setImportMessage(error instanceof Error ? error.message : 'File Excel gagal dibaca.');
+    }
+  };
+
+  const submitImportServices = async () => {
+    if (importRows.length === 0) return;
+
+    setIsImporting(true);
+    setImportMessage('Mengimport layanan ke Supabase...');
+
+    try {
+      const importedServices: ServiceItem[] = [];
+      let failedCount = 0;
+
+      for (const row of importRows) {
+        const response = await fetch(withBasePath('/api/services/'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: row.name }),
+        });
+        const payload = await response.json() as { service?: ServiceItem };
+
+        if (response.ok && payload.service) {
+          importedServices.push(payload.service);
+        } else {
+          failedCount += 1;
+        }
+      }
+
+      setServices((current) => [...current, ...importedServices]);
+      setImportRows([]);
+      setImportFileName('');
+      setImportMessage(`Sukses import ${importedServices.length} layanan${failedCount ? `, ${failedCount} gagal` : ''}.`);
+      setMessage(`Import Excel selesai: ${importedServices.length} layanan masuk ke database.`);
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'Import Excel gagal diproses.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const downloadImportTemplate = async () => {
+    const { default: writeXlsxFile } = await import('write-excel-file/browser');
+    const rows = [
+      { Layanan: 'Nama Layanan 1' },
+      { Layanan: 'Nama Layanan 2' },
+    ];
+    const columns = [
+      { header: 'Layanan', width: 80, cell: (row: typeof rows[number]) => ({ value: row.Layanan }) },
+    ];
+
+    await writeXlsxFile(rows, { columns }).toFile('template-import-layanan.xlsx');
   };
 
   return (
@@ -122,8 +228,13 @@ export default function ServiceListPage() {
 
       <section className="table-card">
         <div className="section-heading-row">
-          <h2>Daftar Layanan</h2>
-          <button type="button" className="text-button" onClick={refreshServices}>Refresh</button>
+          <div className="section-left-actions">
+            <button type="button" className="text-button" onClick={refreshServices}>Refresh</button>
+            <h2>Daftar Layanan</h2>
+          </div>
+          <button type="button" className="text-button" onClick={() => setIsImportOpen(true)}>
+            Import Excel
+          </button>
         </div>
         {message && <p className="admin-data-message">{message}</p>}
 
@@ -141,17 +252,21 @@ export default function ServiceListPage() {
         </form>
 
         <div className="service-link-list">
+          {services.length === 0 && (
+            <p>Belum ada layanan aktif. Tambahkan layanan manual atau import Excel.</p>
+          )}
           {services.map((service, index) => {
             const isEditing = editingId === service.id;
+            const isDeleting = deletingServiceIds.includes(service.id);
             return (
               <div key={service.id} className="service-admin-item">
-                <a className="service-link-item" href={getServiceUrl(service.name, campaignId)}>
+                <div className="service-link-item">
                   <span className="service-link-number">{index + 1}</span>
                   <span className="service-link-content">
                     <strong>{service.name}</strong>
                     <small>Isi survei untuk layanan ini</small>
                   </span>
-                </a>
+                </div>
                 <div className="service-admin-actions">
                   {isEditing ? (
                     <>
@@ -165,7 +280,19 @@ export default function ServiceListPage() {
                   ) : (
                     <>
                       <button type="button" className="text-button" onClick={() => startEdit(service)}>Edit</button>
-                      <button type="button" className="text-button danger-button" onClick={() => deleteService(service)}>Hapus</button>
+                      <a className="text-button" href={getServiceUrl(service.name, campaignId)}>Preview</a>
+                      <button
+                        type="button"
+                        className="text-button danger-button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void deleteService(service);
+                        }}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? 'Menghapus...' : 'Hapus'}
+                      </button>
                     </>
                   )}
                 </div>
@@ -174,6 +301,93 @@ export default function ServiceListPage() {
           })}
         </div>
       </section>
+      {isImportOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="import-service-title">
+          <div className="import-modal">
+            <div className="section-heading-row">
+              <div>
+                <p className="agency">List Layanan</p>
+                <h2 id="import-service-title">Import Excel</h2>
+              </div>
+              <button
+                type="button"
+                className="text-button danger-button"
+                onClick={() => setIsImportOpen(false)}
+                disabled={isImporting}
+              >
+                Tutup
+              </button>
+            </div>
+
+            <div className="import-help">
+              <p>Gunakan satu kolom: Layanan.</p>
+              <button type="button" className="download-button import-template-button" onClick={downloadImportTemplate}>
+                Download Template Excel
+              </button>
+            </div>
+
+            <label className="import-file-picker">
+              Pilih file Excel
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(event) => handleImportFile(event.target.files?.[0])}
+                disabled={isImporting}
+              />
+            </label>
+
+            {importMessage && <p className="blast-notice">{importMessage}</p>}
+            {importFileName && <p className="table-plain-text">File: {importFileName}</p>}
+
+            {importRows.length > 0 && (
+              <div className="import-preview">
+                <div className="section-heading-row">
+                  <h3>Preview</h3>
+                  <span>{importRows.length} layanan siap masuk tabel</span>
+                </div>
+                <div className="blast-table-wrapper">
+                  <table className="blast-table">
+                    <thead>
+                      <tr>
+                        <th>Baris</th>
+                        <th>Layanan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.slice(0, 10).map((row) => (
+                        <tr key={`${row.rowNumber}-${row.name}`}>
+                          <td>{row.rowNumber}</td>
+                          <td>{row.name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {importRows.length > 10 && <p className="table-plain-text">Menampilkan 10 data pertama.</p>}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="download-button"
+                onClick={submitImportServices}
+                disabled={isImporting || importRows.length === 0}
+              >
+                {isImporting ? 'Mengimport...' : 'Submit Import'}
+              </button>
+              <button
+                type="button"
+                className="admin-link secondary-admin-link"
+                onClick={() => setIsImportOpen(false)}
+                disabled={isImporting}
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <AdminFooter />
     </main>
   );

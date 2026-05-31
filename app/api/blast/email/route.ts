@@ -8,7 +8,6 @@ import { getEmailSenderForCampaign } from '../email-senders';
 type EmailRecipient = {
   name: string;
   email: string;
-  whatsapp: string;
   serviceType?: string;
   serviceTypes?: string[];
 };
@@ -70,11 +69,11 @@ const hasMailServer = async (email: string) => {
   }
 };
 
-const getSurveyLink = (baseUrl: string, serviceType: string, campaignId: string) => {
+const getSurveyLink = (baseUrl: string, serviceType: string) => {
   return withPublicUrl(baseUrl, `/${serviceToSlug(serviceType)}`);
 };
 
-const getMultiSurveyLink = (baseUrl: string, campaignId: string) => {
+const getMultiSurveyLink = (baseUrl: string) => {
   return withPublicUrl(baseUrl, '/multi-survey');
 };
 
@@ -89,6 +88,12 @@ const getRecipientServices = (person: EmailRecipient) => (
 );
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+const escapeHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
 
 const getCampaignText = async (campaignId: string) => {
   try {
@@ -111,22 +116,25 @@ const buildEmail = (
   senderFrom: string,
 ) => {
   const services = getRecipientServices(person);
-  const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl, campaignId) : getSurveyLink(baseUrl, services[0], campaignId);
+  const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl) : getSurveyLink(baseUrl, services[0]);
   const clickLink = getTrackingUrl(baseUrl, '/api/track/click', blastGroupId, surveyLink);
   const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
-  const serviceListHtml = services.map((service) => `<li>${service}</li>`).join('');
-  const serviceDisplay = services.join(', ');
+  const serviceListHtml = services.map((service) => `<li>${escapeHtml(service)}</li>`).join('');
+  const safeName = escapeHtml(person.name);
+  const safeSurveyLink = escapeHtml(surveyLink);
+  const safeClickLink = escapeHtml(clickLink);
+  const safeOpenPixel = escapeHtml(openPixel);
 
   if (normalizeEmail(senderFrom) === DIRJEN_SENDER_EMAIL) {
-    const subject = `Survei Kepuasan Terhadap Layanan ${serviceDisplay} di Sekretariat dan Tata Usaha Direktorat Jenderal Ekosistem Digital`;
+    const subject = 'Survei Kepuasan di Sekretariat dan Tata Usaha Direktorat Jenderal Ekosistem Digital';
     const text = [
       'Yth. Pengguna Layanan Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital,',
       '',
       'Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada pegawai, Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.',
       '',
       'Kami mohon kesediaan Saudara/i/Bapak/Ibu untuk mengisi survei pada tautan/link survei berikut :',
-      `Link layanan terkait: ${surveyLink}`,
+      clickLink,
       '',
       'Saudara/i/Bapak/Ibu dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital pada tanggal 2 Juni s.d. 30 Juni 2026',
       '',
@@ -138,11 +146,11 @@ const buildEmail = (
       <p>Yth. Pengguna Layanan Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital,</p>
       <p>Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada pegawai, Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.</p>
       <p>Kami mohon kesediaan Saudara/i/Bapak/Ibu untuk mengisi survei pada tautan/link survei berikut :</p>
-      <p>&#128206; <a href="${clickLink}">Link layanan terkait</a></p>
+      <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
       <p>Saudara/i/Bapak/Ibu dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital pada tanggal 2 Juni s.d. 30 Juni 2026</p>
       <p>Partisipasi Saudara/i/Bapak/Ibu sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Ekosistem Digital</p>
       <p>Terima kasih.</p>
-      <img src="${openPixel}" width="1" height="1" alt="" style="display:none" />
+      <img src="${safeOpenPixel}" width="1" height="1" alt="" style="display:none" />
     `;
 
     return { subject, text, html, surveyLink, clickLink };
@@ -157,22 +165,22 @@ const buildEmail = (
     'Mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:',
     serviceListText,
     '',
-    `Tautan survei: ${surveyLink}`,
+    `Tautan survei: ${clickLink}`,
     '',
     'Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.',
     '',
     'Terima kasih.',
   ].join('\n');
   const html = `
-    <p>Yth. ${person.name},</p>
+    <p>Yth. ${safeName},</p>
     <p>Dengan hormat,</p>
     <p>Mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:</p>
     <ol>${serviceListHtml}</ol>
     <p>Tautan survei:</p>
-    <p><a href="${clickLink}">${surveyLink}</a></p>
+    <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
     <p>Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.</p>
     <p>Terima kasih.</p>
-    <img src="${openPixel}" width="1" height="1" alt="" style="display:none" />
+    <img src="${safeOpenPixel}" width="1" height="1" alt="" style="display:none" />
   `;
 
   return { subject, text, html, surveyLink, clickLink };
@@ -217,7 +225,6 @@ const buildResultRows = (
   id: record.id,
   personName: person.name,
   email: normalizedEmail,
-  whatsapp: person.whatsapp,
   serviceType: record.service_type,
   surveyLink: record.survey_link,
   senderId: record.sender_id,
@@ -251,7 +258,6 @@ const insertFailedRecords = async (
     blast_group_id: string;
     channel: string;
     person_name: string;
-    whatsapp: string;
     email: string;
     sender_id: string;
     sender_label: string;
@@ -337,7 +343,6 @@ export async function POST(request: NextRequest) {
       id: string;
       personName: string;
       email: string;
-      whatsapp: string;
       serviceType: string;
       surveyLink: string;
       message: string;
@@ -363,13 +368,12 @@ export async function POST(request: NextRequest) {
         blast_group_id: blastGroupId,
         channel: 'Email',
         person_name: person.name,
-        whatsapp: person.whatsapp || '',
         email: normalizedEmail,
         sender_id: sender.id,
         sender_label: sender.label,
         sender_email: sender.from,
         service_type: serviceType,
-        survey_link: getSurveyLink(publicBaseUrl, serviceType, campaignId),
+        survey_link: getSurveyLink(publicBaseUrl, serviceType),
         message: email.text,
         campaign_id: campaignId,
       }));
@@ -394,7 +398,7 @@ export async function POST(request: NextRequest) {
 
         if (duplicateError) throw duplicateError;
         const duplicateServices = ((duplicateRows ?? []) as Array<{ service_type: string; survey_link: string }>)
-          .filter((row) => row.survey_link === getSurveyLink(publicBaseUrl, row.service_type, campaignId))
+          .filter((row) => row.survey_link === getSurveyLink(publicBaseUrl, row.service_type))
           .map((row) => row.service_type);
         if (duplicateServices.length > 0) {
           const duplicateMessage = `Dilewati: email untuk layanan ini sudah dikirim/diproses dalam ${DUPLICATE_WINDOW_HOURS} jam terakhir (${duplicateServices}).`;
@@ -458,7 +462,6 @@ export async function POST(request: NextRequest) {
           id: record.id,
           personName: person.name,
           email: normalizedEmail,
-          whatsapp: person.whatsapp,
           senderId: record.sender_id,
           senderLabel: record.sender_label,
           senderEmail: record.sender_email,

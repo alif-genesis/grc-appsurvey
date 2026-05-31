@@ -6,7 +6,6 @@ type BlastPersonRow = {
   created_at: string;
   updated_at: string;
   name: string;
-  whatsapp: string;
   email: string;
   service_types: unknown;
 };
@@ -31,7 +30,6 @@ const mapPersonRow = (row: BlastPersonRow) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   name: row.name,
-  whatsapp: row.whatsapp,
   email: row.email,
   serviceTypes: normalizeServices(row.service_types),
 });
@@ -44,7 +42,6 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json() as {
       name?: string;
-      whatsapp?: string;
       email?: string;
       serviceTypes?: unknown;
     };
@@ -53,7 +50,6 @@ export async function PATCH(
     };
 
     if (typeof body.name === 'string') updates.name = body.name.trim();
-    if (typeof body.whatsapp === 'string') updates.whatsapp = body.whatsapp.trim();
     if (typeof body.email === 'string') updates.email = body.email.trim();
     if (body.serviceTypes !== undefined) updates.service_types = normalizeServices(body.serviceTypes);
 
@@ -75,7 +71,7 @@ export async function PATCH(
       .from('blast_people')
       .update(updates)
       .eq('id', id)
-      .select('id, created_at, updated_at, name, whatsapp, email, service_types');
+      .select('id, created_at, updated_at, name, email, service_types');
     const { data, error } = await scopeFilter(query, true, request).single();
 
     if (error) throw error;

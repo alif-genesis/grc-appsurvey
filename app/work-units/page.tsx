@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { defaultWorkUnits } from '../survey-constants';
 import { withBasePath } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
@@ -12,15 +11,8 @@ type WorkUnitItem = {
   active: boolean;
 };
 
-const fallbackWorkUnits = defaultWorkUnits.map((name, index) => ({
-  id: `default-work-unit-${index + 1}`,
-  name,
-  sortOrder: index + 1,
-  active: true,
-}));
-
 export default function WorkUnitListPage() {
-  const [workUnits, setWorkUnits] = useState<WorkUnitItem[]>(fallbackWorkUnits);
+  const [workUnits, setWorkUnits] = useState<WorkUnitItem[]>([]);
   const [newWorkUnit, setNewWorkUnit] = useState('');
   const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState('');
@@ -31,11 +23,11 @@ export default function WorkUnitListPage() {
       const response = await fetch(withBasePath('/api/work-units/?admin=1'), { cache: 'no-store' });
       const payload = await response.json() as { workUnits?: WorkUnitItem[]; warning?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar satuan kerja.');
-      setWorkUnits(payload.workUnits ?? fallbackWorkUnits);
+      setWorkUnits(payload.workUnits ?? []);
       setMessage(payload.warning || 'Daftar satuan kerja tersinkron dari database.');
     } catch (error) {
-      setWorkUnits(fallbackWorkUnits);
-      setMessage(error instanceof Error ? error.message : 'Menggunakan daftar satuan kerja bawaan.');
+      setWorkUnits([]);
+      setMessage(error instanceof Error ? error.message : 'Gagal mengambil daftar satuan kerja.');
     }
   };
 
@@ -87,6 +79,7 @@ export default function WorkUnitListPage() {
 
   const deleteWorkUnit = async (workUnit: WorkUnitItem) => {
     try {
+      setMessage(`Menghapus satuan kerja "${workUnit.name}"...`);
       const response = await fetch(withBasePath(`/api/work-units/${workUnit.id}/`), { method: 'DELETE' });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal menghapus satuan kerja.');
@@ -107,8 +100,10 @@ export default function WorkUnitListPage() {
 
       <section className="table-card">
         <div className="section-heading-row">
-          <h2>Daftar Satuan Kerja</h2>
-          <button type="button" className="text-button" onClick={refreshWorkUnits}>Refresh</button>
+          <div className="section-left-actions">
+            <button type="button" className="text-button" onClick={refreshWorkUnits}>Refresh</button>
+            <h2>Daftar Satuan Kerja</h2>
+          </div>
         </div>
         {message && <p className="admin-data-message">{message}</p>}
 
@@ -126,6 +121,9 @@ export default function WorkUnitListPage() {
         </form>
 
         <div className="service-link-list">
+          {workUnits.length === 0 && (
+            <p>Belum ada satuan kerja aktif. Tambahkan satuan kerja baru.</p>
+          )}
           {workUnits.map((workUnit, index) => {
             const isEditing = editingId === workUnit.id;
             return (
@@ -150,7 +148,17 @@ export default function WorkUnitListPage() {
                   ) : (
                     <>
                       <button type="button" className="text-button" onClick={() => startEdit(workUnit)}>Edit</button>
-                      <button type="button" className="text-button danger-button" onClick={() => deleteWorkUnit(workUnit)}>Hapus</button>
+                      <button
+                        type="button"
+                        className="text-button danger-button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void deleteWorkUnit(workUnit);
+                        }}
+                      >
+                        Hapus
+                      </button>
                     </>
                   )}
                 </div>

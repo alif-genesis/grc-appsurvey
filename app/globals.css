@@ -1474,6 +1474,12 @@ select {
   margin-bottom: 16px;
 }
 
+.section-left-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .section-heading-row h2 {
   margin: 0;
 }
@@ -1612,9 +1618,9 @@ select {
 
 .add-person-form {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr minmax(260px, 1.6fr) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr) minmax(320px, 1.2fr) minmax(220px, 0.8fr);
   gap: 12px;
-  align-items: end;
+  align-items: center;
   margin-bottom: 20px;
   padding: 16px;
   border: 1px solid #dbeafe;
@@ -1685,6 +1691,11 @@ select {
   box-shadow: 0 0 0 3px rgba(15, 78, 184, 0.12);
 }
 
+.add-person-form .download-button {
+  align-self: center;
+  min-height: 48px;
+}
+
 .blast-table-wrapper {
   overflow-x: auto;
   border: 1px solid #dbe7f6;
@@ -1698,6 +1709,11 @@ select {
   min-width: 980px;
 }
 
+.people-table {
+  table-layout: fixed;
+  min-width: 1180px;
+}
+
 .blast-table th,
 .blast-table td {
   padding: 13px 14px;
@@ -1705,6 +1721,38 @@ select {
   text-align: left;
   vertical-align: top;
   font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.people-table th:nth-child(1),
+.people-table td:nth-child(1) {
+  width: 150px;
+  text-align: center;
+}
+
+.people-table th:nth-child(2),
+.people-table td:nth-child(2) {
+  width: 145px;
+}
+
+.people-table th:nth-child(3),
+.people-table td:nth-child(3) {
+  width: 260px;
+}
+
+.people-table th:nth-child(4),
+.people-table td:nth-child(4) {
+  width: 360px;
+}
+
+.people-table th:nth-child(5),
+.people-table td:nth-child(5) {
+  width: 320px;
+}
+
+.people-table th:nth-child(6),
+.people-table td:nth-child(6) {
+  width: 120px;
 }
 
 .blast-table th {
@@ -1723,9 +1771,17 @@ select {
 }
 
 .blast-table a {
+  display: block;
   color: #0f4eb8;
   overflow-wrap: anywhere;
   font-weight: 700;
+}
+
+.blast-table .validation-message {
+  display: block;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .history-table {
@@ -1763,11 +1819,6 @@ select {
 .email-channel {
   background: #dbeafe;
   color: #1d4ed8;
-}
-
-.whatsapp-channel {
-  background: #dcfce7;
-  color: #166534;
 }
 
 .sender-pill {

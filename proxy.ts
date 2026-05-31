@@ -7,6 +7,7 @@ const protectedApiPaths = [
   '/api/blast/email',
   '/api/blast/history',
   '/api/blast/people',
+  '/api/blast/reset',
   '/api/blast/senders',
   '/api/debug/supabase',
   '/api/survey-campaigns',

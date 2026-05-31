@@ -5,7 +5,7 @@ import {
   antiCorruptionQuestions,
   serviceQuestions,
 } from '../survey-constants';
-import { serviceTypes, withBasePath } from '../services';
+import { withBasePath } from '../services';
 import {
   answerToScale,
   getServiceQuality,
@@ -28,7 +28,7 @@ export default function MonitoringPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
   const [loadMessage, setLoadMessage] = useState('Sinkronisasi data response...');
   const [isLoading, setIsLoading] = useState(true);
-  const [availableServices, setAvailableServices] = useState(serviceTypes);
+  const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [responseServiceFilter, setResponseServiceFilter] = useState('');
   const [calculationScale, setCalculationScale] = useState<CalculationScale>(4);
@@ -67,27 +67,28 @@ export default function MonitoringPage() {
           setSelectedService((current) => (current && !names.includes(current) ? '' : current));
         }
       } catch {
-        setAvailableServices(serviceTypes);
+        setAvailableServices([]);
       }
     };
 
     loadServices();
   }, []);
 
-  const skmCalculation = useMemo(
-    () => getSkmCalculation(records, selectedService, calculationScale),
-    [records, selectedService, calculationScale],
-  );
-  const serviceFilterOptions = useMemo(
-    () => Array.from(new Set([
-      ...availableServices,
-      ...records.map((record) => record.profile.serviceType).filter(Boolean),
-    ])),
+  const activeServiceRecords = useMemo(
+    () => records.filter((record) => availableServices.includes(record.profile.serviceType)),
     [availableServices, records],
   );
+  const skmCalculation = useMemo(
+    () => getSkmCalculation(activeServiceRecords, selectedService, calculationScale),
+    [activeServiceRecords, selectedService, calculationScale],
+  );
+  const serviceFilterOptions = useMemo(
+    () => Array.from(new Set(availableServices.filter(Boolean))),
+    [availableServices],
+  );
   const filteredResponseRecords = useMemo(
-    () => records.filter((record) => !responseServiceFilter || record.profile.serviceType === responseServiceFilter),
-    [records, responseServiceFilter],
+    () => activeServiceRecords.filter((record) => !responseServiceFilter || record.profile.serviceType === responseServiceFilter),
+    [activeServiceRecords, responseServiceFilter],
   );
   const downloadCalculationExcel = async () => {
     const { downloadSkmExcel } = await import('../admin/report-utils');

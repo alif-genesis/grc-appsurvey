@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { serviceTypes, withBasePath } from '../services';
+import { withBasePath } from '../services';
 import {
   getSurveySummary,
   loadSurveyRecords,
@@ -12,7 +12,6 @@ import { AdminFooter, AdminHeader } from './admin-chrome';
 type BlastPerson = {
   id: string;
   name: string;
-  whatsapp: string;
   email: string;
   serviceTypes: string[];
 };
@@ -30,7 +29,7 @@ export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
   const [people, setPeople] = useState<BlastPerson[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
-  const [availableServices, setAvailableServices] = useState(serviceTypes);
+  const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [loadMessage, setLoadMessage] = useState('Sinkronisasi data survey...');
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +84,7 @@ export default function AdminPage() {
         const names = payload.services?.map((service) => service.name).filter(Boolean);
         if (names) setAvailableServices(names);
       } catch {
-        setAvailableServices(serviceTypes);
+        setAvailableServices([]);
       }
     };
 
@@ -98,9 +97,13 @@ export default function AdminPage() {
     });
     return acc;
   }, {}), [people]);
+  const activeServiceRecords = useMemo(
+    () => records.filter((record) => availableServices.includes(record.profile.serviceType)),
+    [availableServices, records],
+  );
   const summary = useMemo(
-    () => getSurveySummary(records, availableServices, servicePopulationCounts),
-    [availableServices, records, servicePopulationCounts],
+    () => getSurveySummary(activeServiceRecords, availableServices, servicePopulationCounts),
+    [activeServiceRecords, availableServices, servicePopulationCounts],
   );
   const serviceRanking = useMemo(() => (
     [...summary.serviceSummary].sort((left, right) => (
@@ -119,7 +122,7 @@ export default function AdminPage() {
       ...history
         .filter((row) => row.serviceType === selectedService && row.submittedAt)
         .map((row) => normalizeKey(row.personName)),
-      ...records
+      ...activeServiceRecords
         .filter((record) => record.profile.serviceType === selectedService)
         .map((record) => normalizeKey(record.profile.name)),
     ]);
@@ -132,31 +135,29 @@ export default function AdminPage() {
           id: person.id,
           name: person.name,
           email: person.email,
-          whatsapp: person.whatsapp,
           status: submitted ? 'Sudah isi' : 'Belum isi',
         };
       });
     }
 
-    return records
+    return activeServiceRecords
       .filter((record) => record.profile.serviceType === selectedService)
       .map((record) => ({
         id: record.id,
         name: record.profile.name,
         email: '-',
-        whatsapp: '-',
         status: 'Sudah isi',
       }));
-  }, [history, people, records, selectedService]);
+  }, [activeServiceRecords, history, people, selectedService]);
 
   const downloadSummaryExcel = async () => {
     const { downloadAdminSummaryExcel } = await import('./report-utils');
-    await downloadAdminSummaryExcel(records, availableServices, servicePopulationCounts);
+    await downloadAdminSummaryExcel(activeServiceRecords, availableServices, servicePopulationCounts);
   };
 
   const downloadSummaryPDF = async () => {
     const { downloadAdminSummaryPDF } = await import('./report-utils');
-    await downloadAdminSummaryPDF(records, availableServices, servicePopulationCounts);
+    await downloadAdminSummaryPDF(activeServiceRecords, availableServices, servicePopulationCounts);
   };
 
   return (
@@ -289,7 +290,6 @@ export default function AdminPage() {
                 <tr>
                   <th>Nama</th>
                   <th>Email</th>
-                  <th>WhatsApp</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -298,7 +298,6 @@ export default function AdminPage() {
                   <tr key={row.id}>
                     <td>{row.name}</td>
                     <td>{row.email || '-'}</td>
-                    <td>{row.whatsapp || '-'}</td>
                     <td>
                       <span className={`status-pill ${row.status === 'Sudah isi' ? 'done-pill' : 'pending-pill'}`}>
                         {row.status}
@@ -308,7 +307,7 @@ export default function AdminPage() {
                 ))}
                 {selectedServiceRows.length === 0 && (
                   <tr>
-                    <td colSpan={4}>Belum ada target user atau response untuk layanan ini.</td>
+                    <td colSpan={3}>Belum ada target user atau response untuk layanan ini.</td>
                   </tr>
                 )}
               </tbody>

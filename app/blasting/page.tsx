@@ -1,25 +1,22 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { serviceToSlug, serviceTypes, withBasePath, withPublicSurveyUrl, withSurveyParam } from '../services';
+import { serviceToSlug, withBasePath, withSurveyParam } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type BlastPerson = {
   id: string;
   name: string;
-  whatsapp: string;
   email: string;
   serviceType?: string;
   serviceTypes: string[];
 };
 
-type BlastPersonDraft = Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'>;
+type BlastPersonDraft = Pick<BlastPerson, 'name' | 'email' | 'serviceTypes'>;
 
 type BlastHistory = {
   id: string;
-  channel: 'WhatsApp' | 'Email';
   personName: string;
-  whatsapp: string;
   email: string;
   senderId?: string;
   senderLabel?: string;
@@ -36,8 +33,8 @@ type BlastHistory = {
   submittedAt?: string | null;
 };
 
-type EmailBlastResult = Omit<BlastHistory, 'channel' | 'createdAt'>;
-type ImportPerson = Pick<BlastPerson, 'name' | 'whatsapp' | 'email' | 'serviceTypes'> & {
+type EmailBlastResult = Omit<BlastHistory, 'createdAt'>;
+type ImportPerson = Pick<BlastPerson, 'name' | 'email' | 'serviceTypes'> & {
   rowNumber: number;
 };
 type EmailSender = {
@@ -49,65 +46,20 @@ type EmailSender = {
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
 const MAX_EMAIL_RECIPIENTS = 5;
 const EMAIL_BATCH_DELAY_MS = 3000;
-const WHATSAPP_BATCH_SIZE = 5;
-const WHATSAPP_BATCH_DELAY_MS = 3000;
 
 const createEmptyPerson = (services: string[] = []) => ({
   name: '',
-  whatsapp: '',
   email: '',
   serviceTypes: services[0] ? [services[0]] : [],
 });
-
-const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
 const getSurveyLink = (serviceType: string, campaignId = '') => withSurveyParam(withBasePath(`/${serviceToSlug(serviceType)}`), campaignId);
-const getMultiSurveyLink = (campaignId = '') => withSurveyParam(withBasePath('/multi-survey'), campaignId);
-const getAbsoluteLink = (path: string) => {
-  return withPublicSurveyUrl(path);
-};
-
 const getPersonServices = (person: Pick<BlastPerson, 'serviceType' | 'serviceTypes'>) => (
   person.serviceTypes?.length ? person.serviceTypes : person.serviceType ? [person.serviceType] : []
-);
-
-const buildMessage = (person: BlastPerson, channel: BlastHistory['channel'], campaignId: string) => {
-  const services = getPersonServices(person);
-  const link = services.length > 1 ? getMultiSurveyLink(campaignId) : getSurveyLink(services[0], campaignId);
-  const target = channel === 'WhatsApp' ? person.whatsapp : person.email;
-  return `Halo ${person.name}, mohon isi survei ${services.join(', ')} melalui link ${link}. Dikirim ke ${target}.`;
-};
-
-const normalizeWhatsAppNumber = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
-  return digits;
-};
-
-const buildWhatsAppText = (person: BlastPerson, campaignId: string) => {
-  const services = getPersonServices(person);
-  const link = services.length > 1
-    ? getAbsoluteLink(getMultiSurveyLink(campaignId))
-    : getAbsoluteLink(getSurveyLink(services[0], campaignId));
-
-  return [
-    `Halo ${person.name},`,
-    '',
-    'Mohon kesediaannya untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi untuk layanan berikut:',
-    ...services.map((service, index) => `${index + 1}. ${service}`),
-    '',
-    `Link survei: ${link}`,
-    '',
-    'Terima kasih.',
-  ].join('\n');
-};
-
-const getWhatsAppWebLink = (person: BlastPerson, campaignId: string) => (
-  `https://wa.me/${normalizeWhatsAppNumber(person.whatsapp)}?text=${encodeURIComponent(buildWhatsAppText(person, campaignId))}`
 );
 
 const formatDateTime = (value?: string | null) => (
@@ -171,10 +123,10 @@ const parseImportServices = (row: Record<string, unknown>, services: string[]) =
 
 export default function BlastingPage() {
   const [people, setPeople] = useState<BlastPerson[]>([]);
-  const [availableServices, setAvailableServices] = useState(serviceTypes);
+  const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
-  const [newPerson, setNewPerson] = useState(createEmptyPerson(serviceTypes));
+  const [newPerson, setNewPerson] = useState(createEmptyPerson([]));
   const [editDrafts, setEditDrafts] = useState<Record<string, BlastPersonDraft>>({});
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<ImportPerson[]>([]);
@@ -182,7 +134,7 @@ export default function BlastingPage() {
   const [importMessage, setImportMessage] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
-  const [isWhatsAppBlasting, setIsWhatsAppBlasting] = useState(false);
+  const [isResettingBlast, setIsResettingBlast] = useState(false);
   const [isPeopleLoading, setIsPeopleLoading] = useState(false);
   const [blastNotice, setBlastNotice] = useState('');
   const [peopleSearch, setPeopleSearch] = useState('');
@@ -195,11 +147,27 @@ export default function BlastingPage() {
   const [selectedSenderId, setSelectedSenderId] = useState('');
 
   useEffect(() => {
-    loadServices();
+    const initialize = async () => {
+      const names = await loadServices();
+      await loadPeople(names);
+    };
+    void initialize();
     loadEmailSenders();
-    loadPeople();
     refreshHistory();
   }, []);
+
+  useEffect(() => {
+    setPeople((current) => {
+      const next = current.map((person) => ({
+        ...person,
+        serviceTypes: getPersonServices(person).filter((service) => availableServices.includes(service)),
+      }));
+      setSelectedPersonIds((currentIds) => currentIds.filter((id) => (
+        next.some((person) => person.id === id && person.serviceTypes.length > 0)
+      )));
+      return next;
+    });
+  }, [availableServices]);
 
   const loadEmailSenders = async () => {
     try {
@@ -228,8 +196,7 @@ export default function BlastingPage() {
           .map((person) => ({
             ...person,
             serviceTypes: getPersonServices(person).filter((service) => names.includes(service)),
-          }))
-          .filter((person) => person.serviceTypes.length > 0));
+          })));
         setPeopleServiceFilter((current) => (current && !names.includes(current) ? '' : current));
         setHistoryServiceFilter((current) => (current && !names.includes(current) ? '' : current));
         setNewPerson((current) => ({
@@ -238,10 +205,12 @@ export default function BlastingPage() {
             ? current.serviceTypes.filter((service) => names.includes(service))
             : names[0] ? [names[0]] : [],
         }));
+        return names;
       }
     } catch {
-      setAvailableServices(serviceTypes);
+      setAvailableServices([]);
     }
+    return [];
   };
 
   const readyPeople = useMemo(
@@ -261,7 +230,6 @@ export default function BlastingPage() {
       const services = getPersonServices(person);
       const matchesSearch = !query || [
         person.name,
-        person.whatsapp,
         person.email,
         services.join(' '),
       ].join(' ').toLowerCase().includes(query);
@@ -276,7 +244,6 @@ export default function BlastingPage() {
       const monitoringStatus = getMonitoringStatus(row);
       const matchesSearch = !query || [
         row.personName,
-        row.whatsapp,
         row.email,
         row.senderLabel,
         row.senderEmail,
@@ -312,7 +279,7 @@ export default function BlastingPage() {
     }
   };
 
-  const loadPeople = async () => {
+  const loadPeople = async (servicesOverride = availableServices) => {
     setIsPeopleLoading(true);
     try {
       const response = await fetch(withBasePath('/api/blast/people'), { cache: 'no-store' });
@@ -320,11 +287,14 @@ export default function BlastingPage() {
 
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil daftar orang.');
 
-      const loadedPeople = payload.people ?? [];
+      const loadedPeople = (payload.people ?? []).map((person) => ({
+        ...person,
+        serviceTypes: getPersonServices(person).filter((service) => servicesOverride.includes(service)),
+      }));
       window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
 
       setPeople(loadedPeople);
-      setSelectedPersonIds(loadedPeople.map((person) => person.id));
+      setSelectedPersonIds(loadedPeople.filter((person) => person.serviceTypes.length > 0).map((person) => person.id));
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil daftar orang.');
     } finally {
@@ -372,7 +342,6 @@ export default function BlastingPage() {
       const parsedRows = rows.map((row, index) => ({
         rowNumber: index + 2,
         name: getImportValue(row, ['nama', 'name', 'nama lengkap', 'namalengkap']),
-        whatsapp: getImportValue(row, ['whatsapp', 'wa', 'no whatsapp', 'nowhatsapp', 'nomor whatsapp', 'phone', 'telepon']),
         email: getImportValue(row, ['email', 'alamat email', 'alamatemail', 'e-mail']),
         serviceTypes: parseImportServices(row, availableServices),
       })).filter((row) => row.name && row.serviceTypes.length > 0);
@@ -428,20 +397,17 @@ export default function BlastingPage() {
     const rows = [
       {
         Nama: 'Nama Responden 1',
-        WhatsApp: '081234567890',
         Email: 'responden1@example.com',
         Layanan: availableServices.slice(0, 2).join(', '),
       },
       {
         Nama: 'Nama Responden 2',
-        WhatsApp: '081234567891',
         Email: 'responden2@example.com',
         Layanan: availableServices[0] || '',
       },
     ];
     const columns = [
       { header: 'Nama', width: 28, cell: (row: typeof rows[number]) => ({ value: row.Nama }) },
-      { header: 'WhatsApp', width: 20, cell: (row: typeof rows[number]) => ({ value: row.WhatsApp }) },
       { header: 'Email', width: 30, cell: (row: typeof rows[number]) => ({ value: row.Email }) },
       { header: 'Layanan', width: 80, cell: (row: typeof rows[number]) => ({ value: row.Layanan }) },
     ];
@@ -454,7 +420,6 @@ export default function BlastingPage() {
       ...current,
       [person.id]: {
         name: person.name,
-        whatsapp: person.whatsapp,
         email: person.email,
         serviceTypes: getPersonServices(person),
       },
@@ -572,68 +537,6 @@ export default function BlastingPage() {
     ));
   };
 
-  const startWhatsAppBlast = async () => {
-    const now = new Date().toISOString();
-    const whatsappTargets = blastTargets.filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10);
-    const rows = blastTargets
-      .filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10)
-      .flatMap((person) => getPersonServices(person).map((serviceType) => ({
-          id: createId(),
-          channel: 'WhatsApp' as const,
-          personName: person.name,
-          whatsapp: person.whatsapp,
-          email: person.email,
-          serviceType,
-          surveyLink: getSurveyLink(serviceType, activeCampaignId),
-          message: buildMessage(person, 'WhatsApp', activeCampaignId),
-          status: 'Sukses' as const,
-          createdAt: now,
-          sentAt: now,
-        })));
-
-    if (rows.length === 0) return;
-
-    setIsWhatsAppBlasting(true);
-    setBlastNotice('Menyiapkan WhatsApp Web...');
-
-    try {
-      const response = await fetch(withBasePath('/api/blast/history'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: rows }),
-      });
-      const payload = await response.json() as { records?: BlastHistory[]; error?: string };
-
-      if (!response.ok) throw new Error(payload.error || 'Gagal menyimpan riwayat WhatsApp.');
-
-      setHistory((current) => [...(payload.records ?? rows), ...current]);
-
-      const batches = Array.from(
-        { length: Math.ceil(whatsappTargets.length / WHATSAPP_BATCH_SIZE) },
-        (_, index) => whatsappTargets.slice(index * WHATSAPP_BATCH_SIZE, (index + 1) * WHATSAPP_BATCH_SIZE),
-      );
-
-      for (const [index, batch] of batches.entries()) {
-        setBlastNotice(`Membuka WhatsApp Web batch ${index + 1}/${batches.length} (${batch.length} orang)...`);
-        batch.forEach((person) => {
-          window.open(getWhatsAppWebLink(person, activeCampaignId), '_blank', 'noopener,noreferrer');
-        });
-
-        if (index < batches.length - 1) {
-          setBlastNotice(`Batch ${index + 1}/${batches.length} dibuka. Menunggu 3 detik sebelum batch berikutnya...`);
-          await sleep(WHATSAPP_BATCH_DELAY_MS);
-        }
-      }
-
-      refreshHistory();
-      setBlastNotice(`${whatsappTargets.length} chat WhatsApp Web dibuka per batch ${WHATSAPP_BATCH_SIZE}. Pesan sudah terisi, tinggal review/kirim di WhatsApp.`);
-    } catch (error) {
-      setBlastNotice(error instanceof Error ? error.message : 'Gagal menyimpan riwayat WhatsApp.');
-    } finally {
-      setIsWhatsAppBlasting(false);
-    }
-  };
-
   const startEmailBlast = async () => {
     const recipients = blastTargets.filter((person) => person.email.trim());
     if (recipients.length === 0) return;
@@ -668,7 +571,6 @@ export default function BlastingPage() {
 
         const now = new Date().toISOString();
         const rows = (payload.results ?? []).map((result) => ({
-          channel: 'Email' as const,
           createdAt: now,
           ...result,
         }));
@@ -708,6 +610,42 @@ export default function BlastingPage() {
     }
   };
 
+  const resetBlast = async () => {
+    const confirmed = window.confirm(
+      'Reset blast akan menghapus riwayat blast, status link, dan seluruh response survey untuk survey aktif. Daftar responden, layanan, dan satuan kerja tetap aman. Lanjutkan?',
+    );
+    if (!confirmed) return;
+
+    setIsResettingBlast(true);
+    setBlastNotice('Mereset data blast survey aktif...');
+
+    try {
+      const response = await fetch(withBasePath('/api/blast/reset'), { method: 'POST' });
+      const payload = await response.json() as {
+        deleted?: { blastRecords?: number; surveyRecords?: number };
+        error?: string;
+      };
+
+      if (!response.ok) throw new Error(payload.error || 'Reset blast gagal diproses.');
+
+      window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
+      window.localStorage.removeItem('genesis-survey-records');
+      setHistory([]);
+      setEditDrafts({});
+      setHistorySearch('');
+      setHistoryServiceFilter('');
+      setHistoryStatusFilter('');
+      setNewPerson(createEmptyPerson(availableServices));
+      setBlastNotice(
+        `Reset blast selesai: ${payload.deleted?.blastRecords ?? 0} riwayat blast dan ${payload.deleted?.surveyRecords ?? 0} response survey dihapus. Daftar responden tetap aman.`,
+      );
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Reset blast gagal diproses.');
+    } finally {
+      setIsResettingBlast(false);
+    }
+  };
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -726,10 +664,29 @@ export default function BlastingPage() {
 
       {blastNotice && <p className="blast-notice">{blastNotice}</p>}
 
+      <section className="table-card blast-section reset-blast-panel">
+        <div className="section-heading-row">
+          <div>
+            <h2>Reset Blast</h2>
+            <span>Bersihkan riwayat blast dan jawaban survey aktif tanpa menghapus daftar responden.</span>
+          </div>
+          <button
+            type="button"
+            className="text-button danger-button"
+            onClick={resetBlast}
+            disabled={isResettingBlast || isEmailBlasting}
+          >
+            {isResettingBlast ? 'Mereset...' : 'Reset Blast'}
+          </button>
+        </div>
+      </section>
+
       <section className="table-card blast-section">
         <div className="section-heading-row">
-          <h2>Sender Email</h2>
-          <button type="button" className="text-button" onClick={loadEmailSenders}>Refresh</button>
+          <div className="section-left-actions">
+            <button type="button" className="text-button" onClick={loadEmailSenders}>Refresh</button>
+            <h2>Sender Email</h2>
+          </div>
         </div>
         <div className="sender-picker">
           {emailSenders.length === 0 ? (
@@ -770,7 +727,7 @@ export default function BlastingPage() {
             <input
               value={peopleSearch}
               onChange={(event) => setPeopleSearch(event.target.value)}
-              placeholder="Nama, email, WhatsApp, layanan"
+              placeholder="Nama, email, layanan"
             />
           </label>
           <label>
@@ -792,14 +749,6 @@ export default function BlastingPage() {
               onChange={(event) => setNewPerson((current) => ({ ...current, name: event.target.value }))}
               placeholder="Nama responden"
               required
-            />
-          </label>
-          <label>
-            WhatsApp
-            <input
-              value={newPerson.whatsapp}
-              onChange={(event) => setNewPerson((current) => ({ ...current, whatsapp: event.target.value }))}
-              placeholder="081234567890"
             />
           </label>
           <label>
@@ -835,7 +784,7 @@ export default function BlastingPage() {
           <p>Tidak ada user yang cocok dengan filter.</p>
         ) : (
           <div className="blast-table-wrapper">
-            <table className="blast-table">
+            <table className="blast-table people-table">
               <thead>
                 <tr>
                   <th>
@@ -844,7 +793,6 @@ export default function BlastingPage() {
                     </button>
                   </th>
                   <th>Nama</th>
-                  <th>WhatsApp</th>
                   <th>Email</th>
                   <th>Layanan</th>
                   <th>Link</th>
@@ -857,14 +805,16 @@ export default function BlastingPage() {
                   const isEditing = Boolean(draft);
                   const visiblePerson = draft ? { ...person, ...draft } : person;
                   const visibleServices = getPersonServices(visiblePerson);
+                  const canSelectPerson = visibleServices.length > 0;
 
                   return (
                     <tr key={person.id}>
                       <td>
                         <input
                           type="checkbox"
-                          checked={selectedPersonIds.includes(person.id)}
+                          checked={canSelectPerson && selectedPersonIds.includes(person.id)}
                           onChange={() => toggleSelectedPerson(person.id)}
+                          disabled={!canSelectPerson}
                         />
                       </td>
                       <td>
@@ -875,16 +825,6 @@ export default function BlastingPage() {
                           />
                         ) : (
                           <span className="table-plain-text">{person.name}</span>
-                        )}
-                      </td>
-                      <td>
-                        {isEditing ? (
-                          <input
-                            value={visiblePerson.whatsapp}
-                            onChange={(event) => updatePersonDraft(person.id, 'whatsapp', event.target.value)}
-                          />
-                        ) : (
-                          <span className="table-plain-text">{person.whatsapp || '-'}</span>
                         )}
                       </td>
                       <td>
@@ -922,7 +862,7 @@ export default function BlastingPage() {
                       </td>
                       <td>
                         {visibleServices.length === 0 ? (
-                          <span>Belum ada layanan</span>
+                          <span className="error-message validation-message">Belum ada layanan aktif. Edit dan pilih layanan dulu.</span>
                         ) : visibleServices.length > 1 ? (
                           <span>{visibleServices.length} layanan dalam 1 link email</span>
                         ) : (
@@ -973,22 +913,15 @@ export default function BlastingPage() {
           <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
           <small>{selectedSenderId ? `${blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch ${MAX_EMAIL_RECIPIENTS} orang` : 'Pilih sender email terlebih dahulu'}</small>
         </button>
-        <button
-          type="button"
-          className="blast-action-card"
-          onClick={startWhatsAppBlast}
-          disabled={isWhatsAppBlasting || blastTargets.every((person) => normalizeWhatsAppNumber(person.whatsapp).length < 10)}
-        >
-          <span>{isWhatsAppBlasting ? 'Membuka WhatsApp...' : 'Start Blast WhatsApp'}</span>
-          <small>{blastTargets.filter((person) => normalizeWhatsAppNumber(person.whatsapp).length >= 10).length} penerima siap, batch {WHATSAPP_BATCH_SIZE} orang</small>
-        </button>
       </section>
 
       <section className="table-card blast-section">
         <div className="section-heading-row">
-          <h2>Riwayat Blast</h2>
-          <div className="inline-actions">
+          <div className="section-left-actions">
             <button type="button" className="text-button" onClick={refreshHistory}>Refresh</button>
+            <h2>Riwayat Blast</h2>
+          </div>
+          <div className="inline-actions">
             {history.length > 0 && (
               <button type="button" className="text-button" onClick={clearHistory}>Bersihkan Riwayat</button>
             )}
@@ -1001,7 +934,7 @@ export default function BlastingPage() {
             <input
               value={historySearch}
               onChange={(event) => setHistorySearch(event.target.value)}
-              placeholder="Nama, email, WhatsApp, layanan, status"
+              placeholder="Nama, email, layanan, status"
             />
           </label>
           <label>
@@ -1051,12 +984,12 @@ export default function BlastingPage() {
               </thead>
               <tbody>
                 {filteredHistory.map((row, index) => (
-                  <tr key={`${row.id}-${row.serviceType}-${row.channel}-${index}`}>
+                  <tr key={`${row.id}-${row.serviceType}-${index}`}>
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
                     <td>{row.personName}</td>
                     <td>
-                      <span className={`channel-badge ${row.channel === 'Email' ? 'email-channel' : 'whatsapp-channel'}`}>{row.channel}</span>
-                      <span className="history-target">{row.channel === 'WhatsApp' ? row.whatsapp : row.email}</span>
+                      <span className="channel-badge email-channel">Email</span>
+                      <span className="history-target">{row.email}</span>
                     </td>
                     <td>
                       {row.senderEmail ? (
@@ -1105,7 +1038,7 @@ export default function BlastingPage() {
             </div>
 
             <div className="import-help">
-              <p>Gunakan kolom: Nama, WhatsApp, Email, Layanan.</p>
+              <p>Gunakan kolom: Nama, Email, Layanan.</p>
               <p>Untuk beberapa layanan, pisahkan dengan koma di kolom Layanan.</p>
               <button type="button" className="download-button import-template-button" onClick={downloadImportTemplate}>
                 Download Template Excel
@@ -1137,7 +1070,6 @@ export default function BlastingPage() {
                       <tr>
                         <th>Baris</th>
                         <th>Nama</th>
-                        <th>WhatsApp</th>
                         <th>Email</th>
                         <th>Layanan</th>
                       </tr>
@@ -1147,7 +1079,6 @@ export default function BlastingPage() {
                         <tr key={`${row.rowNumber}-${row.email}`}>
                           <td>{row.rowNumber}</td>
                           <td>{row.name}</td>
-                          <td>{row.whatsapp || '-'}</td>
                           <td>{row.email || '-'}</td>
                           <td>{row.serviceTypes.join(', ')}</td>
                         </tr>

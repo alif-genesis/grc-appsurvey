@@ -25,7 +25,6 @@ type GroupRecord = {
   id: string;
   blastGroupId: string;
   personName: string;
-  whatsapp: string;
   email: string;
   serviceType: string;
   surveyLink: string;

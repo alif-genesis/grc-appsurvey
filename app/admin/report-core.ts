@@ -67,14 +67,15 @@ export const getSurveySummary = (
     return acc;
   }, {});
 
-  const serviceNames = Array.from(new Set([
-    ...availableServices,
-    ...records.map((record) => record.profile.serviceType).filter(Boolean),
-  ]));
+  const serviceNames = Array.from(new Set(availableServices.filter(Boolean)));
+  const activeServiceNames = new Set(serviceNames);
+  const filteredCounts = Object.fromEntries(
+    Object.entries(actualCounts).filter(([service]) => activeServiceNames.has(service)),
+  );
   const targets = serviceNames.map((name) => ({ name, target: 10 }));
 
   const serviceSummary = targets.map((service) => {
-    const responded = actualCounts[service.name] ?? 0;
+    const responded = filteredCounts[service.name] ?? 0;
     const population = populationCounts[service.name] ?? responded;
     const target = getKrejcieMorganSampleSize(population);
     const gap = Math.max(0, target - responded);

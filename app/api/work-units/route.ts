@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const campaignId = await getWorkUnitCampaignId(request);
+    const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
     let query = supabase
       .from('work_unit_catalog')
       .select('id, created_at, updated_at, name, sort_order, active')
@@ -78,15 +79,16 @@ export async function GET(request: NextRequest) {
     const workUnits = (data as WorkUnitRow[]).map(mapWorkUnitRow);
     return NextResponse.json({
       campaignId,
-      workUnits: workUnits.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? workUnits : fallbackWorkUnits(),
+      workUnits: adminOnly || workUnits.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? workUnits : fallbackWorkUnits(),
     });
   } catch (error) {
     const campaignId = getRequestedSurveyScope(request);
     const isDefaultCampaign = campaignId === DEFAULT_SURVEY_CAMPAIGN_ID;
+    const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
     return NextResponse.json({
       campaignId,
-      workUnits: isDefaultCampaign ? fallbackWorkUnits() : [],
-      warning: formatServerError(error, 'Menggunakan daftar satuan kerja bawaan.'),
+      workUnits: !adminOnly && isDefaultCampaign ? fallbackWorkUnits() : [],
+      warning: formatServerError(error, adminOnly ? 'Gagal mengambil daftar satuan kerja.' : 'Menggunakan daftar satuan kerja bawaan.'),
     });
   }
 }
@@ -106,6 +108,32 @@ export async function POST(request: NextRequest) {
       .limit(1);
     const { data: maxData } = await scopeFilter(maxQuery, true, request);
     const nextSortOrder = ((maxData?.[0]?.sort_order as number | undefined) ?? 0) + 1;
+
+    const existingQuery = supabase
+      .from('work_unit_catalog')
+      .select('id, created_at, updated_at, name, sort_order, active')
+      .eq('name', name)
+      .eq('active', false)
+      .limit(1);
+    const { data: existingData, error: existingError } = await scopeFilter(existingQuery, true, request);
+    if (existingError) throw existingError;
+
+    const existingWorkUnit = existingData?.[0] as WorkUnitRow | undefined;
+    if (existingWorkUnit) {
+      const reactivateQuery = supabase
+        .from('work_unit_catalog')
+        .update({
+          active: true,
+          sort_order: nextSortOrder,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingWorkUnit.id)
+        .select('id, created_at, updated_at, name, sort_order, active');
+      const { data: reactivatedData, error: reactivateError } = await scopeFilter(reactivateQuery, true, request).single();
+      if (reactivateError) throw reactivateError;
+
+      return NextResponse.json({ workUnit: mapWorkUnitRow(reactivatedData as WorkUnitRow) });
+    }
 
     const { data, error } = await supabase
       .from('work_unit_catalog')

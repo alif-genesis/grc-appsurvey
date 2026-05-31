@@ -54,10 +54,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const query = supabase
       .from('work_unit_catalog')
       .update({ active: false, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    const { error } = await scopeFilter(query, true, request);
+      .eq('id', id)
+      .select('id');
+    const { data, error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
+    if (!data?.length) {
+      return NextResponse.json({ error: 'Satuan kerja tidak ditemukan di survey aktif.' }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
