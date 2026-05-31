@@ -62,6 +62,14 @@ const getPersonServices = (person: Pick<BlastPerson, 'serviceType' | 'serviceTyp
   person.serviceTypes?.length ? person.serviceTypes : person.serviceType ? [person.serviceType] : []
 );
 
+const getSenderDisplayLabel = (row: Pick<BlastHistory, 'senderEmail' | 'senderLabel'>) => {
+  if (row.senderEmail?.toLowerCase() === 'tusesdjid@mail.komdigi.go.id') {
+    return 'Sekretariat DJID';
+  }
+
+  return row.senderLabel || row.senderEmail || '';
+};
+
 const formatDateTime = (value?: string | null) => (
   value ? new Date(value).toLocaleString('id-ID') : '-'
 );
@@ -1021,7 +1029,7 @@ export default function BlastingPage() {
                     <td>
                       {row.senderEmail ? (
                         <span className="sender-pill">
-                          <strong>{row.senderLabel || row.senderEmail}</strong>
+                          <strong>{getSenderDisplayLabel(row)}</strong>
                           <small>{row.senderEmail}</small>
                         </span>
                       ) : '-'}
