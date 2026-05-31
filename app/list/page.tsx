@@ -30,12 +30,21 @@ const getImportValue = (row: Record<string, unknown>, aliases: string[]) => {
   return match ? String(match[1] ?? '').trim() : '';
 };
 
-const normalizeExcelRows = (rawRows: unknown) => {
+const normalizeExcelRows = (rawRows: unknown): Record<string, unknown>[] => {
   if (!Array.isArray(rawRows)) {
     throw new Error('Format Excel tidak valid.');
   }
 
   if (rawRows.length === 0) return [];
+
+  if (rawRows.every((sheet) => (
+    sheet
+    && typeof sheet === 'object'
+    && !Array.isArray(sheet)
+    && Array.isArray((sheet as { data?: unknown }).data)
+  ))) {
+    return rawRows.flatMap((sheet) => normalizeExcelRows((sheet as { data: unknown }).data));
+  }
 
   if (rawRows.every((row) => row && !Array.isArray(row) && typeof row === 'object')) {
     return rawRows as Record<string, unknown>[];
