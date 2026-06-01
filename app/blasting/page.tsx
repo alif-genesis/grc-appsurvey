@@ -182,6 +182,8 @@ export default function BlastingPage() {
   const [historySearch, setHistorySearch] = useState('');
   const [historyServiceFilter, setHistoryServiceFilter] = useState('');
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
+  const [isDeletingHistory, setIsDeletingHistory] = useState(false);
   const [activeCampaignId, setActiveCampaignId] = useState('');
   const [emailSenders, setEmailSenders] = useState<EmailSender[]>([]);
   const [selectedSenderId, setSelectedSenderId] = useState('');
@@ -294,8 +296,21 @@ export default function BlastingPage() {
       const matchesService = !historyServiceFilter || row.serviceType === historyServiceFilter;
       const matchesStatus = !historyStatusFilter || monitoringStatus === historyStatusFilter;
       return matchesSearch && matchesService && matchesStatus;
-    });
+    }).sort((left, right) => (
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+    ));
   }, [history, historySearch, historyServiceFilter, historyStatusFilter]);
+
+  const filteredHistoryIds = useMemo(() => (
+    filteredHistory.map((row) => row.id)
+  ), [filteredHistory]);
+
+  const selectedFilteredHistoryCount = useMemo(() => (
+    filteredHistoryIds.filter((id) => selectedHistoryIds.includes(id)).length
+  ), [filteredHistoryIds, selectedHistoryIds]);
+
+  const isAllFilteredHistorySelected = filteredHistoryIds.length > 0
+    && selectedFilteredHistoryCount === filteredHistoryIds.length;
 
   const refreshHistory = async () => {
     try {
@@ -304,7 +319,9 @@ export default function BlastingPage() {
 
       if (!response.ok) throw new Error(payload.error || 'Gagal mengambil monitoring blast.');
 
-      setHistory(payload.records ?? []);
+      const records = payload.records ?? [];
+      setHistory(records);
+      setSelectedHistoryIds((current) => current.filter((id) => records.some((row) => row.id === id)));
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil monitoring blast.');
     }
@@ -572,6 +589,22 @@ export default function BlastingPage() {
     ));
   };
 
+  const toggleSelectedHistory = (id: string) => {
+    setSelectedHistoryIds((current) => (
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    ));
+  };
+
+  const toggleAllFilteredHistory = () => {
+    setSelectedHistoryIds((current) => {
+      if (isAllFilteredHistorySelected) {
+        return current.filter((id) => !filteredHistoryIds.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...filteredHistoryIds]));
+    });
+  };
+
   const startEmailBlast = async () => {
     const recipients = blastTargets.filter((person) => person.email.trim());
     if (recipients.length === 0) return;
@@ -632,6 +665,8 @@ export default function BlastingPage() {
   };
 
   const clearHistory = async () => {
+    if (!window.confirm('Bersihkan seluruh riwayat blast untuk survey aktif?')) return;
+
     try {
       const response = await fetch(withBasePath('/api/blast/history'), { method: 'DELETE' });
       if (!response.ok) {
@@ -639,9 +674,36 @@ export default function BlastingPage() {
         throw new Error(payload.error || 'Gagal membersihkan riwayat blast.');
       }
       setHistory([]);
+      setSelectedHistoryIds([]);
       setBlastNotice('Riwayat blast dibersihkan.');
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal membersihkan riwayat blast.');
+    }
+  };
+
+  const deleteSelectedHistory = async () => {
+    if (selectedHistoryIds.length === 0) return;
+    const confirmed = window.confirm(`Hapus ${selectedHistoryIds.length} riwayat blast yang dipilih?`);
+    if (!confirmed) return;
+
+    setIsDeletingHistory(true);
+
+    try {
+      const response = await fetch(withBasePath('/api/blast/history'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedHistoryIds }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Gagal menghapus riwayat blast pilihan.');
+
+      setHistory((current) => current.filter((row) => !selectedHistoryIds.includes(row.id)));
+      setSelectedHistoryIds([]);
+      setBlastNotice('Riwayat blast pilihan berhasil dihapus.');
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal menghapus riwayat blast pilihan.');
+    } finally {
+      setIsDeletingHistory(false);
     }
   };
 
@@ -992,6 +1054,24 @@ export default function BlastingPage() {
               <option value="Gagal dikirim">Gagal dikirim</option>
             </select>
           </label>
+          <div className="history-selection-actions" aria-label="Aksi riwayat blast">
+            <button
+              type="button"
+              className="text-button"
+              onClick={toggleAllFilteredHistory}
+              disabled={filteredHistoryIds.length === 0 || isDeletingHistory}
+            >
+              {isAllFilteredHistorySelected ? 'Batal Pilih Semua' : 'Pilih Semua'}
+            </button>
+            <button
+              type="button"
+              className="text-button danger-button"
+              onClick={deleteSelectedHistory}
+              disabled={selectedHistoryIds.length === 0 || isDeletingHistory}
+            >
+              {isDeletingHistory ? 'Menghapus...' : `Hapus Riwayat${selectedHistoryIds.length ? ` (${selectedHistoryIds.length})` : ''}`}
+            </button>
+          </div>
         </div>
 
         {history.length === 0 ? (
@@ -1003,6 +1083,7 @@ export default function BlastingPage() {
             <table className="blast-table history-table">
               <thead>
                 <tr>
+                  <th>No.</th>
                   <th>Waktu</th>
                   <th>Nama</th>
                   <th>Tujuan</th>
@@ -1015,11 +1096,13 @@ export default function BlastingPage() {
                   <th>Sudah Isi</th>
                   <th>Monitoring</th>
                   <th>Error</th>
+                  <th>Pilih</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredHistory.map((row, index) => (
                   <tr key={`${row.id}-${row.serviceType}-${index}`}>
+                    <td>{index + 1}</td>
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
                     <td>{row.personName}</td>
                     <td>
@@ -1046,6 +1129,14 @@ export default function BlastingPage() {
                       </span>
                     </td>
                     <td>{row.error || '-'}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedHistoryIds.includes(row.id)}
+                        onChange={() => toggleSelectedHistory(row.id)}
+                        aria-label={`Pilih riwayat blast ${row.personName}`}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

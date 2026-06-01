@@ -1508,7 +1508,16 @@ select {
 }
 
 .history-filter-row {
-  grid-template-columns: minmax(240px, 1.2fr) minmax(240px, 1fr) minmax(220px, 0.9fr);
+  grid-template-columns: minmax(240px, 1.2fr) minmax(240px, 1fr) minmax(220px, 0.9fr) auto;
+  align-items: end;
+}
+
+.history-selection-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 260px;
 }
 
 .filter-row label {
@@ -1650,6 +1659,12 @@ select {
   outline: none;
 }
 
+.blast-table input[type="checkbox"] {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+}
+
 .service-checkbox-list {
   display: grid;
   gap: 8px;
@@ -1785,7 +1800,16 @@ select {
 }
 
 .history-table {
-  min-width: 1320px;
+  min-width: 1460px;
+}
+
+.history-table th:first-child,
+.history-table td:first-child,
+.history-table th:last-child,
+.history-table td:last-child {
+  width: 72px;
+  min-width: 72px;
+  text-align: center;
 }
 
 .history-table td {

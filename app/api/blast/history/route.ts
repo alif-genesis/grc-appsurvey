@@ -142,16 +142,18 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const body = await request.json().catch(() => ({})) as { ids?: unknown };
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      : [];
     const supabase = getSupabase();
-    const query = supabase
-      .from('blast_records')
-      .delete()
-      .neq('id', '');
+    let query = supabase.from('blast_records').delete();
+    query = ids.length > 0 ? query.in('id', ids) : query.neq('id', '');
     const { error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, deletedIds: ids });
   } catch (error) {
     return NextResponse.json(
       { error: formatServerError(error, 'Gagal membersihkan riwayat blast.') },
