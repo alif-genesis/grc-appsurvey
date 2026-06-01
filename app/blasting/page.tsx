@@ -6,6 +6,8 @@ import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type BlastPerson = {
   id: string;
+  createdAt?: string;
+  updatedAt?: string;
   name: string;
   email: string;
   serviceType?: string;
@@ -41,6 +43,14 @@ type EmailSender = {
   id: string;
   label: string;
   email: string;
+};
+type PeopleSortMode = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+type BlastResultDialog = {
+  title: string;
+  message: string;
+  successCount: number;
+  failedCount: number;
+  totalCount: number;
 };
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
@@ -177,8 +187,10 @@ export default function BlastingPage() {
   const [isResettingBlast, setIsResettingBlast] = useState(false);
   const [isPeopleLoading, setIsPeopleLoading] = useState(false);
   const [blastNotice, setBlastNotice] = useState('');
+  const [blastResultDialog, setBlastResultDialog] = useState<BlastResultDialog | null>(null);
   const [peopleSearch, setPeopleSearch] = useState('');
   const [peopleServiceFilter, setPeopleServiceFilter] = useState('');
+  const [peopleSort, setPeopleSort] = useState<PeopleSortMode>('date-desc');
   const [historySearch, setHistorySearch] = useState('');
   const [historyServiceFilter, setHistoryServiceFilter] = useState('');
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
@@ -277,8 +289,17 @@ export default function BlastingPage() {
       ].join(' ').toLowerCase().includes(query);
       const matchesService = !peopleServiceFilter || services.includes(peopleServiceFilter);
       return matchesSearch && matchesService;
+    }).sort((left, right) => {
+      if (peopleSort === 'name-asc' || peopleSort === 'name-desc') {
+        const comparison = left.name.localeCompare(right.name, 'id', { sensitivity: 'base' });
+        return peopleSort === 'name-asc' ? comparison : -comparison;
+      }
+
+      const leftTime = new Date(left.createdAt || 0).getTime();
+      const rightTime = new Date(right.createdAt || 0).getTime();
+      return peopleSort === 'date-asc' ? leftTime - rightTime : rightTime - leftTime;
     });
-  }, [people, peopleSearch, peopleServiceFilter]);
+  }, [people, peopleSearch, peopleServiceFilter, peopleSort]);
 
   const filteredHistory = useMemo(() => {
     const query = historySearch.trim().toLowerCase();
@@ -314,6 +335,7 @@ export default function BlastingPage() {
 
   const refreshHistory = async () => {
     try {
+      setHistoryStatusFilter('');
       const response = await fetch(withBasePath('/api/blast/history'), { cache: 'no-store' });
       const payload = await response.json() as { records?: BlastHistory[]; error?: string };
 
@@ -589,6 +611,20 @@ export default function BlastingPage() {
     ));
   };
 
+  const getPeopleSortLabel = () => {
+    if (peopleSort === 'name-asc') return 'A-Z';
+    if (peopleSort === 'name-desc') return 'Z-A';
+    return 'Date Added';
+  };
+
+  const togglePeopleSort = () => {
+    setPeopleSort((current) => {
+      if (current === 'name-asc') return 'name-desc';
+      if (current === 'name-desc') return 'date-desc';
+      return 'name-asc';
+    });
+  };
+
   const toggleSelectedHistory = (id: string) => {
     setSelectedHistoryIds((current) => (
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -615,13 +651,14 @@ export default function BlastingPage() {
 
     setIsEmailBlasting(true);
     setBlastNotice('');
+    setBlastResultDialog(null);
+    const allRows: BlastHistory[] = [];
 
     try {
       const batches = Array.from(
         { length: Math.ceil(recipients.length / MAX_EMAIL_RECIPIENTS) },
         (_, index) => recipients.slice(index * MAX_EMAIL_RECIPIENTS, (index + 1) * MAX_EMAIL_RECIPIENTS),
       );
-      const allRows: BlastHistory[] = [];
 
       for (const [index, batch] of batches.entries()) {
         setBlastNotice(`Mengirim batch ${index + 1}/${batches.length} (${batch.length} penerima)...`);
@@ -657,8 +694,25 @@ export default function BlastingPage() {
       const successCount = allRows.filter((row) => row.status === 'Sukses').length;
       const failedCount = allRows.length - successCount;
       setBlastNotice(`Email blast selesai: ${successCount} sukses, ${failedCount} gagal/dilewati dari ${recipients.length} penerima.`);
+      setBlastResultDialog({
+        title: 'Blast Email Selesai',
+        message: 'Hasil lengkap sudah masuk ke Riwayat Blast.',
+        successCount,
+        failedCount,
+        totalCount: recipients.length,
+      });
     } catch (error) {
-      setBlastNotice(error instanceof Error ? error.message : 'Email blast gagal diproses.');
+      const message = error instanceof Error ? error.message : 'Email blast gagal diproses.';
+      const successCount = allRows.filter((row) => row.status === 'Sukses').length;
+      const failedCount = allRows.length - successCount;
+      setBlastNotice(message);
+      setBlastResultDialog({
+        title: 'Blast Email Berhenti',
+        message,
+        successCount,
+        failedCount,
+        totalCount: recipients.length,
+      });
     } finally {
       setIsEmailBlasting(false);
     }
@@ -705,6 +759,46 @@ export default function BlastingPage() {
     } finally {
       setIsDeletingHistory(false);
     }
+  };
+
+  const downloadHistoryExcel = async (rowsToDownload = filteredHistory, filenamePrefix = 'riwayat-blast') => {
+    if (rowsToDownload.length === 0) return;
+
+    const { default: writeXlsxFile } = await import('write-excel-file/browser');
+    const rows = rowsToDownload.map((row, index) => ({
+      nomor: index + 1,
+      waktu: formatDateTime(row.createdAt),
+      nama: row.personName,
+      email: row.email,
+      sender: getSenderDisplayLabel(row),
+      senderEmail: row.senderEmail || '',
+      layanan: row.serviceType,
+      link: row.surveyLink,
+      terkirim: formatDateTime(row.sentAt),
+      emailDibuka: formatDateTime(row.openedAt),
+      linkDibuka: formatDateTime(row.clickedAt),
+      sudahIsi: formatDateTime(row.submittedAt),
+      monitoring: getMonitoringStatus(row),
+      error: row.error || '',
+    }));
+    const columns = [
+      { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
+      { header: 'Waktu', width: 22, cell: (row: typeof rows[number]) => ({ value: row.waktu }) },
+      { header: 'Nama', width: 26, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
+      { header: 'Email', width: 34, cell: (row: typeof rows[number]) => ({ value: row.email }) },
+      { header: 'Sender', width: 24, cell: (row: typeof rows[number]) => ({ value: row.sender }) },
+      { header: 'Email Sender', width: 34, cell: (row: typeof rows[number]) => ({ value: row.senderEmail }) },
+      { header: 'Layanan', width: 52, cell: (row: typeof rows[number]) => ({ value: row.layanan }) },
+      { header: 'Link', width: 72, cell: (row: typeof rows[number]) => ({ value: row.link }) },
+      { header: 'Terkirim', width: 22, cell: (row: typeof rows[number]) => ({ value: row.terkirim }) },
+      { header: 'Email Dibuka', width: 22, cell: (row: typeof rows[number]) => ({ value: row.emailDibuka }) },
+      { header: 'Link Dibuka', width: 22, cell: (row: typeof rows[number]) => ({ value: row.linkDibuka }) },
+      { header: 'Sudah Isi', width: 22, cell: (row: typeof rows[number]) => ({ value: row.sudahIsi }) },
+      { header: 'Monitoring', width: 34, cell: (row: typeof rows[number]) => ({ value: row.monitoring }) },
+      { header: 'Error', width: 44, cell: (row: typeof rows[number]) => ({ value: row.error }) },
+    ];
+
+    await writeXlsxFile(rows, { columns }).toFile(`${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const resetBlast = async () => {
@@ -880,7 +974,7 @@ export default function BlastingPage() {
         ) : filteredPeople.length === 0 ? (
           <p>Tidak ada user yang cocok dengan filter.</p>
         ) : (
-          <div className="blast-table-wrapper">
+          <div className="blast-table-wrapper people-table-scroll">
             <table className="blast-table people-table">
               <thead>
                 <tr>
@@ -889,7 +983,12 @@ export default function BlastingPage() {
                       Pilih Semua
                     </button>
                   </th>
-                  <th>Nama</th>
+                  <th>
+                    <button type="button" className="table-sort-button" onClick={togglePeopleSort}>
+                      Nama
+                      <span>{getPeopleSortLabel()}</span>
+                    </button>
+                  </th>
                   <th>Email</th>
                   <th>Layanan</th>
                   <th>Link</th>
@@ -1020,6 +1119,16 @@ export default function BlastingPage() {
           </div>
           <div className="inline-actions">
             {history.length > 0 && (
+              <button
+                type="button"
+                className="download-button compact-download-button"
+                onClick={() => { void downloadHistoryExcel(); }}
+                disabled={filteredHistory.length === 0}
+              >
+                Download Excel
+              </button>
+            )}
+            {history.length > 0 && (
               <button type="button" className="text-button" onClick={clearHistory}>Bersihkan Riwayat</button>
             )}
           </div>
@@ -1079,7 +1188,7 @@ export default function BlastingPage() {
         ) : filteredHistory.length === 0 ? (
           <p>Tidak ada riwayat yang cocok dengan filter.</p>
         ) : (
-          <div className="blast-table-wrapper">
+          <div className="blast-table-wrapper limited-table-scroll">
             <table className="blast-table history-table">
               <thead>
                 <tr>
@@ -1190,7 +1299,7 @@ export default function BlastingPage() {
                   <h3>Preview</h3>
                   <span>{importRows.length} user siap masuk tabel</span>
                 </div>
-                <div className="blast-table-wrapper">
+                <div className="blast-table-wrapper limited-table-scroll">
                   <table className="blast-table">
                     <thead>
                       <tr>
@@ -1232,6 +1341,40 @@ export default function BlastingPage() {
                 disabled={isImporting}
               >
                 Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {blastResultDialog && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="blast-result-title">
+          <div className="blast-result-modal">
+            <div>
+              <p className="agency">Ringkasan Blast</p>
+              <h2 id="blast-result-title">{blastResultDialog.title}</h2>
+            </div>
+            <div className="blast-result-grid">
+              <div>
+                <span>Sukses</span>
+                <strong>{blastResultDialog.successCount}</strong>
+              </div>
+              <div>
+                <span>Gagal</span>
+                <strong>{blastResultDialog.failedCount}</strong>
+              </div>
+              <div>
+                <span>Total</span>
+                <strong>{blastResultDialog.totalCount}</strong>
+              </div>
+            </div>
+            <p>{blastResultDialog.message}</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="download-button"
+                onClick={() => setBlastResultDialog(null)}
+              >
+                Tutup
               </button>
             </div>
           </div>

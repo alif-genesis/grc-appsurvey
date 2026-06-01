@@ -105,6 +105,16 @@ export default function AdminPage() {
     () => getSurveySummary(activeServiceRecords, availableServices, servicePopulationCounts),
     [activeServiceRecords, availableServices, servicePopulationCounts],
   );
+  const completedServiceCount = useMemo(
+    () => summary.serviceSummary.filter((row) => row.percent >= 100).length,
+    [summary.serviceSummary],
+  );
+  const completedServicePercent = availableServices.length > 0
+    ? Math.round((completedServiceCount / availableServices.length) * 100)
+    : 0;
+  const completedRespondentPercent = people.length > 0
+    ? Math.round((summary.overallResponded / people.length) * 100)
+    : 0;
   const serviceRanking = useMemo(() => (
     [...summary.serviceSummary].sort((left, right) => (
       right.percent - left.percent
@@ -160,6 +170,16 @@ export default function AdminPage() {
     await downloadAdminSummaryPDF(activeServiceRecords, availableServices, servicePopulationCounts);
   };
 
+  const downloadFulfillmentRankingPDF = async () => {
+    const { downloadSurveyFulfillmentRankingPDF } = await import('./report-utils');
+    await downloadSurveyFulfillmentRankingPDF(
+      activeServiceRecords,
+      availableServices,
+      servicePopulationCounts,
+      people.length,
+    );
+  };
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -188,13 +208,36 @@ export default function AdminPage() {
         </div>
         <div className={`summary-card wide-card ${isLoading ? 'loading-card' : ''}`}>
           <h2>Progress Keseluruhan</h2>
-          <div className="gauge-card">
-            <div className="gauge-ring" style={{ '--pct': summary.overallPercent } as any}>
-              <div className="gauge-center"></div>
+          <div className="gauge-row">
+            <div className="gauge-card compact-gauge-card">
+              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': summary.overallPercent } as any}>
+                <div className="gauge-center compact-gauge-center"></div>
+              </div>
+              <div className="gauge-label">
+                <small>Target</small>
+                <span>{summary.overallPercent}%</span>
+                <p>{summary.overallResponded}/{summary.overallTarget}</p>
+              </div>
             </div>
-            <div className="gauge-label">
-              <span>{summary.overallPercent}%</span>
-              <p>{summary.overallResponded}/{summary.overallTarget}</p>
+            <div className="gauge-card compact-gauge-card">
+              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': completedServicePercent } as any}>
+                <div className="gauge-center compact-gauge-center"></div>
+              </div>
+              <div className="gauge-label">
+                <small>Layanan</small>
+                <span>{completedServicePercent}%</span>
+                <p>{completedServiceCount}/{availableServices.length}</p>
+              </div>
+            </div>
+            <div className="gauge-card compact-gauge-card">
+              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': completedRespondentPercent } as any}>
+                <div className="gauge-center compact-gauge-center"></div>
+              </div>
+              <div className="gauge-label">
+                <small>Responden</small>
+                <span>{completedRespondentPercent}%</span>
+                <p>{summary.overallResponded}/{people.length}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -202,18 +245,29 @@ export default function AdminPage() {
 
       <section className="table-card">
         <div className="section-heading-row">
-          <h2>Pemenuhan Survey</h2>
+          <h2>Ranking Pemenuhan Survey</h2>
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="download-button"
+              onClick={() => { void downloadFulfillmentRankingPDF(); }}
+            >
+              Download PDF
+            </button>
+          </div>
         </div>
-        <div className="ranking-bar-list">
-          {serviceRanking.map((row) => (
-            <div className="ranking-bar-row" key={`rank-${row.name}`}>
-              <span>{row.name}</span>
-              <div className="ranking-bar-track">
-                <div className="ranking-bar-fill" style={{ width: `${Math.min(100, row.percent)}%` }} />
+        <div className="admin-scroll-panel">
+          <div className="ranking-bar-list">
+            {serviceRanking.map((row) => (
+              <div className="ranking-bar-row" key={`rank-${row.name}`}>
+                <span>{row.name}</span>
+                <div className="ranking-bar-track">
+                  <div className="ranking-bar-fill" style={{ width: `${Math.min(100, row.percent)}%` }} />
+                </div>
+                <strong>{row.percent}%</strong>
               </div>
-              <strong>{row.percent}%</strong>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
@@ -237,7 +291,7 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
-        <div className="service-summary-table-wrapper">
+        <div className="service-summary-table-wrapper admin-scroll-panel">
           <table className="service-summary-table">
             <thead>
               <tr>
@@ -284,7 +338,7 @@ export default function AdminPage() {
               Tutup
             </button>
           </div>
-          <div className="service-summary-table-wrapper">
+          <div className="service-summary-table-wrapper limited-table-scroll">
             <table className="service-summary-table">
               <thead>
                 <tr>
@@ -321,8 +375,8 @@ export default function AdminPage() {
         {records.length === 0 ? (
           <p>Tidak ada data survei tersimpan.</p>
         ) : (
-          <div className="record-list">
-            {records.slice(0, 5).map((record) => (
+          <div className="record-list limited-list-scroll">
+            {records.map((record) => (
               <div key={record.id} className="record-item">
                 <div className="record-header">
                   <div>

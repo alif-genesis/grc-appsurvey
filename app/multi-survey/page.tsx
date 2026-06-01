@@ -258,7 +258,7 @@ export default function MultiSurveyPage() {
     setMessage('');
 
     try {
-      await Promise.all(pendingRecords.map(async (record) => {
+      for (const record of pendingRecords) {
         const survey: SurveyRecord = {
           id: createClientId(),
           createdAt: new Date().toISOString(),
@@ -279,8 +279,13 @@ export default function MultiSurveyPage() {
           body: JSON.stringify(survey),
         });
 
-        if (!response.ok) throw new Error(await readErrorResponse(response));
-      }));
+        if (!response.ok) {
+          const message = await readErrorResponse(response);
+          if (!message.includes('sudah pernah disubmit')) {
+            throw new Error(message);
+          }
+        }
+      }
 
       setSubmitted(true);
       clearDraft(draftKeyRef.current);

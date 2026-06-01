@@ -33,8 +33,9 @@ const sampleSizeTable = [
 export const getKrejcieMorganSampleSize = (population: number) => {
   if (population <= 0) return 0;
   if (population < 10) return population;
-  const match = sampleSizeTable.find(([populationLimit]) => population <= populationLimit);
-  return match ? match[1] : 384;
+
+  const match = [...sampleSizeTable].reverse().find(([populationLimit]) => population >= populationLimit);
+  return Math.min(population, match?.[1] ?? population);
 };
 
 export type CalculationScale = 4 | 5;

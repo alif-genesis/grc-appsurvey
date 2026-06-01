@@ -5,7 +5,7 @@ import {
   antiCorruptionQuestions,
   serviceQuestions,
 } from '../survey-constants';
-import { GENESIS_LOGO_URL, serviceTypes } from '../services';
+import { GENESIS_LOGO_URL, serviceTypes, withBasePath } from '../services';
 import {
   answerToScale,
   getServiceQuality,
@@ -264,14 +264,20 @@ const loadImageDataUrl = async (url: string) => {
   return { dataUrl, mimeType: blob.type };
 };
 
-const addGenesisLogo = async (doc: jsPDF) => {
+const addGenesisLogo = async (doc: jsPDF, x = 40, y = 28, width = 90, height = 53) => {
   try {
-    const logo = await loadImageDataUrl(GENESIS_LOGO_URL);
+    const logo = await loadImageDataUrl(withBasePath('/genetika-1-warna.png'));
     const format = logo.mimeType.includes('jpeg') || logo.mimeType.includes('jpg') ? 'JPEG' : 'PNG';
-    doc.addImage(logo.dataUrl, format, 40, 28, 90, 38);
+    doc.addImage(logo.dataUrl, format, x, y, width, height);
   } catch {
-    doc.setFontSize(12);
-    doc.text('PT GENETIKA SOLUSI BISNIS', 40, 48);
+    try {
+      const logo = await loadImageDataUrl(GENESIS_LOGO_URL);
+      const format = logo.mimeType.includes('jpeg') || logo.mimeType.includes('jpg') ? 'JPEG' : 'PNG';
+      doc.addImage(logo.dataUrl, format, x, y, width, height);
+    } catch {
+      doc.setFontSize(12);
+      doc.text('PT GENETIKA SOLUSI BISNIS', x, y + 20);
+    }
   }
 };
 
@@ -291,6 +297,275 @@ const drawTargetChart = (doc: jsPDF, summary: ReturnType<typeof getSurveySummary
     doc.setFontSize(8);
     doc.text(`${row.percent}%`, 440, y + 8);
   });
+};
+
+const getDownloadedAtText = () => new Date().toLocaleString('id-ID');
+
+const drawStyledReportFrame = async (
+  doc: jsPDF,
+  titleLines: string[],
+  metaLines: string[],
+  options: { logoWidth?: number; logoHeight?: number } = {},
+) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const titleX = pageWidth > 700 ? 310 : 275;
+
+  doc.setFillColor(248, 251, 255);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  doc.setFillColor(15, 78, 184);
+  doc.triangle(pageWidth - 230, 0, pageWidth, 0, pageWidth - 120, 76, 'F');
+  doc.setFillColor(111, 191, 68);
+  doc.triangle(pageWidth - 70, 0, pageWidth, 0, pageWidth, 112, 'F');
+  doc.setFillColor(15, 78, 184);
+  doc.triangle(0, pageHeight - 56, 0, pageHeight, pageWidth, pageHeight, 'F');
+  doc.setFillColor(111, 191, 68);
+  doc.triangle(pageWidth - 190, pageHeight, pageWidth, pageHeight, pageWidth - 38, pageHeight - 30, 'F');
+
+  await addGenesisLogo(doc, 40, 32, options.logoWidth ?? 120, options.logoHeight ?? 70);
+
+  doc.setTextColor(10, 35, 72);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(pageWidth > 700 ? 24 : 28);
+  titleLines.forEach((line, index) => {
+    doc.text(line, titleX, 72 + (index * 30));
+  });
+  doc.setFillColor(111, 191, 68);
+  doc.roundedRect(titleX, 72 + (titleLines.length * 30), 54, 4, 2, 2, 'F');
+
+  doc.setFontSize(9);
+  metaLines.forEach((line, index) => {
+    doc.text(line, titleX, 104 + (titleLines.length * 30) + (index * 14));
+  });
+};
+
+const drawStyledReportContinuationBackground = (doc: jsPDF) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  doc.setFillColor(248, 251, 255);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  doc.setFillColor(15, 78, 184);
+  doc.triangle(pageWidth - 230, 0, pageWidth, 0, pageWidth - 120, 76, 'F');
+  doc.setFillColor(111, 191, 68);
+  doc.triangle(pageWidth - 70, 0, pageWidth, 0, pageWidth, 112, 'F');
+  doc.setFillColor(15, 78, 184);
+  doc.triangle(0, pageHeight - 56, 0, pageHeight, pageWidth, pageHeight, 'F');
+  doc.setFillColor(111, 191, 68);
+  doc.triangle(pageWidth - 190, pageHeight, pageWidth, pageHeight, pageWidth - 38, pageHeight - 30, 'F');
+};
+
+const drawStyledPageNumber = (doc: jsPDF, pageNumber: number, totalPages: number) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  doc.setPage(pageNumber);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.text(`${pageNumber}/${totalPages}`, pageWidth - 56, pageHeight - 18);
+};
+
+const getCurrentPdfPage = (doc: jsPDF) => (
+  (doc as any).internal?.getCurrentPageInfo?.().pageNumber as number | undefined
+) ?? 1;
+
+const styledAutoTablePageHooks = () => ({
+  willDrawPage: (data: { doc: jsPDF }) => {
+    if (getCurrentPdfPage(data.doc) > 1) {
+      drawStyledReportContinuationBackground(data.doc);
+    }
+  },
+});
+
+const applyStyledReportPageNumbers = (doc: jsPDF) => {
+  const totalPages = doc.getNumberOfPages();
+
+  for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+    drawStyledPageNumber(doc, pageNumber, totalPages);
+  }
+};
+
+const drawRankingReportFrame = async (
+  doc: jsPDF,
+  pageNumber: number,
+  totalPages: number,
+  period: string,
+  totalRespondents: number,
+  completedServices: number,
+  totalServices: number,
+  completedRespondents: number,
+) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  doc.setFillColor(248, 251, 255);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  doc.setFillColor(15, 78, 184);
+  doc.triangle(pageWidth - 210, 0, pageWidth, 0, pageWidth - 94, 72, 'F');
+  doc.setFillColor(111, 191, 68);
+  doc.triangle(pageWidth - 64, 0, pageWidth, 0, pageWidth, 100, 'F');
+  doc.setFillColor(15, 78, 184);
+  doc.triangle(0, pageHeight - 72, 0, pageHeight, pageWidth, pageHeight, 'F');
+  doc.setFillColor(111, 191, 68);
+  doc.triangle(pageWidth - 180, pageHeight, pageWidth, pageHeight, pageWidth - 40, pageHeight - 32, 'F');
+
+  await addGenesisLogo(doc, 40, 34, 130, 76);
+
+  doc.setTextColor(10, 35, 72);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(30);
+  doc.text('LAPORAN', 275, 84);
+  doc.setFontSize(20);
+  doc.text('PEMENUHAN SURVEY', 275, 112);
+  doc.setFillColor(111, 191, 68);
+  doc.roundedRect(275, 130, 54, 4, 2, 2, 'F');
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Diunduh: ${period}`, 275, 156);
+
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(352, 206, 190, 62, 8, 8, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(352, 206, 190, 62, 8, 8, 'S');
+  doc.setFillColor(15, 78, 184);
+  doc.circle(390, 237, 17, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.text('R', 386, 242);
+  doc.setTextColor(10, 35, 72);
+  doc.setFontSize(7.5);
+  doc.text('TOTAL RESPONDEN', 438, 226);
+  doc.setTextColor(15, 78, 184);
+  doc.setFontSize(22);
+  doc.text(String(totalRespondents), 438, 252);
+
+  doc.setTextColor(15, 78, 184);
+  doc.setFontSize(12);
+  doc.text('RINGKASAN', 72, 218);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text([
+    'Laporan ini menyajikan informasi mengenai pemenuhan survey',
+    'berdasarkan layanan yang tersedia. Data diperoleh dari hasil',
+    'pengumpulan dan pengolahan data survey saat laporan diunduh.',
+  ], 72, 238, { lineHeightFactor: 1.45 });
+
+  const servicePercent = totalServices > 0 ? Math.round((completedServices / totalServices) * 100) : 0;
+  const respondentPercent = totalRespondents > 0 ? Math.round((completedRespondents / totalRespondents) * 100) : 0;
+  const drawMetricTable = (x: number, title: string, value: string, percent: number) => {
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, 282, 236, 54, 7, 7, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, 282, 236, 54, 7, 7, 'S');
+    doc.setFillColor(15, 78, 184);
+    doc.roundedRect(x, 282, 236, 18, 7, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text(title, x + 10, 295);
+    doc.setTextColor(10, 35, 72);
+    doc.setFontSize(9);
+    doc.text(value, x + 10, 320);
+    doc.setTextColor(15, 78, 184);
+    doc.setFontSize(13);
+    doc.text(`${percent}%`, x + 222, 321, { align: 'right' });
+  };
+
+  drawMetricTable(40, 'PEMENUHAN LAYANAN SELESAI', `${completedServices}/${totalServices} layanan`, servicePercent);
+  drawMetricTable(310, 'RESPONDEN SUDAH MENGISI', `${completedRespondents}/${totalRespondents} responden`, respondentPercent);
+
+  doc.setFillColor(15, 78, 184);
+  doc.roundedRect(36, 360, 170, 28, 5, 5, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('PEMENUHAN SURVEY', 76, 378);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('KETERANGAN', 40, pageHeight - 98);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text([
+    'Persentase menunjukkan tingkat pemenuhan survey untuk masing-masing layanan.',
+    'Semakin tinggi persentase, semakin baik tingkat pemenuhan survey.',
+  ], 40, pageHeight - 82, { lineHeightFactor: 1.35 });
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.text(`${pageNumber}/${totalPages}`, pageWidth - 56, pageHeight - 18);
+};
+
+export const downloadSurveyFulfillmentRankingPDF = async (
+  records: SurveyRecord[],
+  availableServices = serviceTypes,
+  populationCounts: Record<string, number> = {},
+  totalRespondents?: number,
+) => {
+  const summary = getSurveySummary(records, availableServices, populationCounts);
+  const rows = [...summary.serviceSummary].sort((left, right) => (
+    right.percent - left.percent
+    || right.responded - left.responded
+    || left.name.localeCompare(right.name)
+  ));
+  const rowsPerPage = 7;
+  const pages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const period = getDownloadedAtText();
+  const respondentTotal = totalRespondents ?? summary.uniqueRespondents;
+  const completedServices = rows.filter((row) => row.percent >= 100).length;
+
+  for (let pageIndex = 0; pageIndex < pages; pageIndex += 1) {
+    if (pageIndex > 0) doc.addPage();
+    await drawRankingReportFrame(
+      doc,
+      pageIndex + 1,
+      pages,
+      period,
+      respondentTotal,
+      completedServices,
+      rows.length,
+      summary.overallResponded,
+    );
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(32, 382, 532, 286, 10, 10, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(32, 382, 532, 286, 10, 10, 'S');
+
+    const pageRows = rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
+    pageRows.forEach((row, index) => {
+      const y = 422 + (index * 36);
+      const barWidth = 198;
+      const barX = 292;
+      const fillWidth = Math.min(barWidth, Math.max(0, (row.percent / 100) * barWidth));
+
+      doc.setFillColor(111, 191, 68);
+      doc.circle(52, y + 7, 3, 'F');
+      doc.setTextColor(10, 35, 72);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.2);
+      doc.text(doc.splitTextToSize(row.name, 220), 62, y + 9);
+      doc.setFillColor(226, 232, 240);
+      doc.roundedRect(barX, y, barWidth, 8, 4, 4, 'F');
+      if (fillWidth > 0) {
+        doc.setFillColor(15, 78, 184);
+        doc.roundedRect(barX, y, fillWidth, 8, 4, 4, 'F');
+      }
+      doc.setTextColor(15, 78, 184);
+      doc.setFontSize(8.5);
+      doc.text(`${row.percent}%`, 548, y + 8, { align: 'right' });
+      doc.setDrawColor(226, 232, 240);
+      doc.line(48, y + 27, 548, y + 27);
+    });
+  }
+
+  doc.save(`ranking-pemenuhan-survey-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
 const getAverageScale = (records: SurveyRecord[], prefix: 'service' | 'anti', calculationScale: CalculationScale) => {
@@ -336,43 +611,56 @@ export const downloadAdminSummaryPDF = async (
   const summary = getSurveySummary(records, availableServices, populationCounts);
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
-  await addGenesisLogo(doc);
-  doc.setFontSize(16);
-  doc.text('Report Summary Survei Layanan', 150, 48);
-  doc.setFontSize(9);
-  doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 150, 64);
-  doc.text(`Total respon: ${summary.overallResponded}/${summary.overallTarget} (${summary.overallPercent}%)`, 150, 78);
+  await drawStyledReportFrame(
+    doc,
+    ['LAPORAN', 'SUMMARY SURVEY'],
+    [
+      `Diunduh: ${getDownloadedAtText()}`,
+      `Total respon: ${summary.overallResponded}/${summary.overallTarget} (${summary.overallPercent}%)`,
+    ],
+  );
 
-  drawTargetChart(doc, summary, 110);
+  doc.setTextColor(15, 78, 184);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('SUMMARY SURVEY PENGISIAN LAYANAN SEKRETARIAT', 40, 224);
 
   autoTable(doc, {
-    startY: 280,
+    ...styledAutoTablePageHooks(),
+    startY: 248,
     head: [['Nama Layanan', 'Jumlah Responden', 'Target', 'Respon', 'GAP', 'Persentase']],
     body: summary.serviceSummary.map((row) => [row.name, row.population, row.target, row.responded, row.gap, `${row.percent}%`]),
-    styles: { fontSize: 8, cellPadding: 4 },
+    styles: { fontSize: 8, cellPadding: 5, textColor: '#0f172a', lineColor: '#dbe7f6', lineWidth: 0.5 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
-    margin: { left: 40, right: 40 },
+    alternateRowStyles: { fillColor: '#f8fbff' },
+    margin: { left: 40, right: 40, bottom: 70 },
   });
 
+  applyStyledReportPageNumbers(doc);
   doc.save(`summary-survei-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
 export const downloadMonitoringPDF = async (records: SurveyRecord[], calculationScale: CalculationScale = 4) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
-  await addGenesisLogo(doc);
+  await drawStyledReportFrame(
+    doc,
+    ['LAPORAN', 'DETAIL RESPONSE'],
+    [
+      `Diunduh: ${getDownloadedAtText()}`,
+      `Total response: ${records.length}`,
+      `Perhitungan: Skala ${calculationScale}`,
+    ],
+    { logoWidth: 112, logoHeight: 66 },
+  );
 
-  doc.setFontSize(16);
-  doc.text('Monitoring Response Survei', 150, 48);
-  doc.setFontSize(9);
-  doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 150, 64);
-  doc.text(`Total response: ${records.length}`, 150, 78);
-  doc.text(`Perhitungan: Skala ${calculationScale}`, 150, 92);
-
-  drawAverageChart(doc, `Grafik Rata-rata Skala ${calculationScale} Kepuasan Layanan`, getAverageScale(records, 'service', calculationScale), calculationScale, 110, 40);
-  drawAverageChart(doc, `Grafik Rata-rata Skala ${calculationScale} Persepsi Anti Korupsi`, getAverageScale(records, 'anti', calculationScale), calculationScale, 110, 420);
+  doc.setTextColor(15, 78, 184);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('DETAIL RESPONSE SELURUH RESPONDEN', 40, 218);
 
   autoTable(doc, {
-    startY: 300,
+    ...styledAutoTablePageHooks(),
+    startY: 242,
     head: [[
       'Tanggal',
       'Nama',
@@ -393,24 +681,28 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[], calculation
         record.comments,
       ];
     }),
-    styles: { fontSize: 7, cellPadding: 3 },
+    styles: { fontSize: 6.5, cellPadding: 3, textColor: '#0f172a', lineColor: '#dbe7f6', lineWidth: 0.4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
-    margin: { left: 40, right: 40 },
+    alternateRowStyles: { fillColor: '#f8fbff' },
+    margin: { left: 40, right: 40, top: 40, bottom: 62 },
   });
 
+  applyStyledReportPageNumbers(doc);
   doc.save(`monitoring-response-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
 export const downloadSkmPDF = async (calculation: SkmCalculation) => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
-  await addGenesisLogo(doc);
-
-  doc.setFontSize(15);
-  doc.text('Report Perhitungan SKM', 150, 48);
-  doc.setFontSize(9);
-  doc.text(`Layanan: ${calculation.serviceName || 'Semua Layanan'}`, 150, 64);
-  doc.text(`Jumlah responden: ${calculation.records.length}`, 150, 78);
-  doc.text(`Perhitungan: Skala ${calculation.calculationScale}`, 150, 92);
+  await drawStyledReportFrame(
+    doc,
+    ['LAPORAN', 'PERHITUNGAN SKM'],
+    [
+      `Diunduh: ${getDownloadedAtText()}`,
+      `Layanan: ${calculation.serviceName || 'Semua Layanan'}`,
+      `Jumlah responden: ${calculation.records.length} | Skala ${calculation.calculationScale}`,
+    ],
+    { logoWidth: 112, logoHeight: 66 },
+  );
 
   const maxQuestionCount = Math.max(calculation.serviceResults.length, calculation.antiResults.length);
   const body: Array<Array<string | number>> = calculation.records.map((record, index) => [
@@ -439,8 +731,14 @@ export const downloadSkmPDF = async (calculation: SkmCalculation) => {
     ...calculation.antiResults.map((result) => result.weightedNrr),
   ]);
 
+  doc.setTextColor(15, 78, 184);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('PERHITUNGAN SKM PER LAYANAN', 40, 218);
+
   autoTable(doc, {
-    startY: 105,
+    ...styledAutoTablePageHooks(),
+    startY: 242,
     head: [[
       'No. Resp',
       ...calculation.serviceResults.map((result) => result.code),
@@ -448,24 +746,28 @@ export const downloadSkmPDF = async (calculation: SkmCalculation) => {
       ...calculation.antiResults.map((result) => result.code),
     ]],
     body,
-    styles: { fontSize: 7, cellPadding: 3, halign: 'center' },
+    styles: { fontSize: 6.8, cellPadding: 3, halign: 'center', textColor: '#0f172a', lineColor: '#dbe7f6', lineWidth: 0.4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
-    margin: { left: 32, right: 32 },
+    alternateRowStyles: { fillColor: '#f8fbff' },
+    margin: { left: 40, right: 40, top: 40, bottom: 62 },
   });
 
   autoTable(doc, {
+    ...styledAutoTablePageHooks(),
     startY: (doc as any).lastAutoTable.finalY + 18,
     head: [['Indikator', `Nilai Skala ${calculation.calculationScale}`, 'Nilai Skala 100', 'Mutu']],
     body: [
       ['SKM Unit Pelayanan', calculation.serviceSkmScale, calculation.serviceSkm100, getServiceQuality(calculation.serviceSkm100)],
       ['Indeks Persepsi Anti Korupsi', calculation.antiSkmScale, calculation.antiSkm100, getServiceQuality(calculation.antiSkm100)],
     ],
-    styles: { fontSize: 8, cellPadding: 4 },
+    styles: { fontSize: 8, cellPadding: 4, textColor: '#0f172a', lineColor: '#dbe7f6', lineWidth: 0.4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
-    margin: { left: 32, right: 32 },
+    alternateRowStyles: { fillColor: '#f8fbff' },
+    margin: { left: 40, right: 40, top: 40, bottom: 62 },
   });
 
   autoTable(doc, {
+    ...styledAutoTablePageHooks(),
     startY: (doc as any).lastAutoTable.finalY + 18,
     head: [['Unsur Pelayanan', 'Pertanyaan', 'Unsur Anti Korupsi', 'Pertanyaan']],
     body: Array.from({ length: maxQuestionCount }).map((_, index) => [
@@ -474,10 +776,12 @@ export const downloadSkmPDF = async (calculation: SkmCalculation) => {
       calculation.antiResults[index]?.code ?? '',
       calculation.antiResults[index]?.question ?? '',
     ]),
-    styles: { fontSize: 7, cellPadding: 3 },
+    styles: { fontSize: 7, cellPadding: 3, textColor: '#0f172a', lineColor: '#dbe7f6', lineWidth: 0.4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },
-    margin: { left: 32, right: 32 },
+    alternateRowStyles: { fillColor: '#f8fbff' },
+    margin: { left: 40, right: 40, top: 40, bottom: 62 },
   });
 
+  applyStyledReportPageNumbers(doc);
   doc.save(`report-skm-${new Date().toISOString().slice(0, 10)}.pdf`);
 };

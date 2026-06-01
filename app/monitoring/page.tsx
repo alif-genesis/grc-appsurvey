@@ -188,7 +188,7 @@ export default function MonitoringPage() {
         {skmCalculation.records.length === 0 ? (
           <p>Belum ada response untuk layanan ini.</p>
         ) : (
-          <div className="skm-table-wrapper">
+          <div className="skm-table-wrapper limited-table-scroll">
             <table className="service-summary-table skm-table">
               <thead>
                 <tr>
@@ -288,7 +288,7 @@ export default function MonitoringPage() {
         {filteredResponseRecords.length === 0 ? (
           <p>Tidak ada data survei tersimpan.</p>
         ) : (
-          <div className="monitoring-table-wrapper">
+          <div className="monitoring-table-wrapper limited-table-scroll">
             <table className="service-summary-table monitoring-table">
               <thead>
                 <tr>

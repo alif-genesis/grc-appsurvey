@@ -13,7 +13,6 @@ type EmailRecipient = {
 };
 
 const MAX_RECIPIENTS_PER_REQUEST = 5;
-const DAILY_EMAIL_LIMIT = 100;
 const SEND_DELAY_MS = 2000;
 const SMTP_RETRY_LIMIT = 1;
 const DUPLICATE_WINDOW_HOURS = 24;
@@ -351,24 +350,6 @@ export async function POST(request: NextRequest) {
     const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();
     const publicBaseUrl = getPublicBaseUrl(request);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayQuery = supabase
-      .from('blast_records')
-      .select('id', { count: 'exact', head: true })
-      .eq('channel', 'Email')
-      .eq('send_status', 'Sukses')
-      .gte('sent_at', todayStart.toISOString());
-    const { count: todayCount, error: countError } = await scopeFilter(todayQuery, true, request);
-
-    if (countError) throw countError;
-    if ((todayCount ?? 0) + recipients.length > DAILY_EMAIL_LIMIT) {
-      return NextResponse.json(
-        { error: `Limit harian ${DAILY_EMAIL_LIMIT} email sudah/akan terlewati. Hari ini sudah terkirim ${todayCount ?? 0}.` },
-        { status: 429 },
-      );
-    }
-
     const transporter = nodemailer.createTransport(host ? {
       host,
       port,
