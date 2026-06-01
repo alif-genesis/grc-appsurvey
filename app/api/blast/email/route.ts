@@ -160,12 +160,20 @@ const buildEmail = (
 
   if (normalizeEmail(senderFrom) === DIRJEN_SENDER_EMAIL) {
     const subject = 'Survei Kepuasan di Sekretariat dan Tata Usaha Direktorat Jenderal Ekosistem Digital';
+    const serviceTextBlock = services.length > 1 ? [
+      'Layanan yang diterima:',
+      serviceListText,
+      '',
+    ] : [];
+    const serviceHtmlBlock = services.length > 1 ? `<p>Layanan yang diterima:</p><ol>${serviceListHtml}</ol>` : '';
     const text = [
       'Yth. Pengguna Layanan Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital,',
       '',
       'Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada pegawai, Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.',
       '',
       'Kami mohon kesediaan Saudara/i/Bapak/Ibu untuk mengisi survei pada tautan/link survei berikut :',
+      '',
+      ...serviceTextBlock,
       clickLink,
       '',
       'Saudara/i/Bapak/Ibu dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital pada tanggal 2 Juni s.d. 30 Juni 2026',
@@ -178,6 +186,7 @@ const buildEmail = (
       <p>Yth. Pengguna Layanan Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital,</p>
       <p>Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada pegawai, Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.</p>
       <p>Kami mohon kesediaan Saudara/i/Bapak/Ibu untuk mengisi survei pada tautan/link survei berikut :</p>
+      ${serviceHtmlBlock}
       <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
       <p>Saudara/i/Bapak/Ibu dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Tata Usaha di Direktorat Jenderal Ekosistem Digital pada tanggal 2 Juni s.d. 30 Juni 2026</p>
       <p>Partisipasi Saudara/i/Bapak/Ibu sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Ekosistem Digital</p>
