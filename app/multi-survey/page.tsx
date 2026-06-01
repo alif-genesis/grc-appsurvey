@@ -48,6 +48,13 @@ type SurveyContext = {
   description: string;
 };
 
+const getSurveyPeriodText = (context: SurveyContext) => {
+  const normalizedContext = `${context.id} ${context.name} ${context.description}`.toLowerCase();
+  return normalizedContext.includes('infrastruktur digital')
+    ? '04 Juni s.d. 30 Juni 2026'
+    : '02 Juni 2026 s.d. 30 Juni 2026';
+};
+
 const getDraftKey = (blastGroupId: string) => `${MULTI_SURVEY_DRAFT_PREFIX}:${blastGroupId}`;
 
 const loadDraft = (key: string) => loadJsonStorage<MultiSurveyDraft | null>(key, null);
@@ -99,6 +106,7 @@ export default function MultiSurveyPage() {
   const draftKeyRef = useRef('');
   const blastGroupIdRef = useRef('');
   const pendingRecords = records.filter((record) => !record.submittedAt);
+  const surveyPeriodText = getSurveyPeriodText(surveyContext);
 
   useEffect(() => {
     const initialBlastGroupId = getInitialBlastGroupId();
@@ -313,7 +321,7 @@ export default function MultiSurveyPage() {
               <li>Survei terdiri atas dua survei; survei kepuasan layanan dan survei persepsi anti korupsi.</li>
               <li>Seluruh kolom pada survei bersifat required (wajib diisi).</li>
               <li>Berikan penilaian pada seluruh pertanyaan, lalu klik <strong>[Submit]</strong>.</li>
-              <li>Jangka waktu pengisian survei adalah 02 Juni 2026 s.d. 30 Juni 2026.</li>
+              <li>Jangka waktu pengisian survei adalah {surveyPeriodText}.</li>
             </ol>
           </div>
 
