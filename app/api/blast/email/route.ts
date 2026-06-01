@@ -130,30 +130,27 @@ const buildEmail = (
   if (normalizeEmail(senderFrom) === INFRASTRUKTUR_SENDER_EMAIL) {
     const subject = 'Survei Kepuasan Layanan Infrastruktur Digital';
     const text = [
-      `Yth. Bpk/Ibu ${person.name}`,
+      'Yth. Pengguna Layanan Sekretariat Direktorat Jenderal Infrastruktur Digital,',
       '',
-      'Dengan hormat,',
+      'Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada Pegawai, Sekretariat Direktorat Jenderal Infrastruktur Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.',
       '',
-      'Menindaklanjuti Nota Dinas Sesditjen Infrastruktur Digital No...tanggal...tentang Pelaksanaan Survei Layanan Kesekretariatan, mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:',
+      'Kami mohon kesediaan Bapak/Ibu/Saudara/i untuk mengisi survei pada tautan/link survei berikut :',
       '',
-      serviceListText,
+      surveyLink,
       '',
-      'Tautan survei:',
+      'Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 04 Juni s.d. 30 Juni 2026',
       '',
-      clickLink,
-      '',
-      'Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.',
+      'Partisipasi Bapak/Ibu/Saudara/i sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Infrastruktur Digital',
       '',
       'Terima kasih.',
     ].join('\n');
     const html = `
-      <p>Yth. Bpk/Ibu ${safeName}</p>
-      <p>Dengan hormat,</p>
-      <p>Menindaklanjuti Nota Dinas Sesditjen Infrastruktur Digital No...tanggal...tentang Pelaksanaan Survei Layanan Kesekretariatan, mohon kesediaan Bapak/Ibu untuk mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi atas layanan berikut:</p>
-      <p>${services.map(escapeHtml).join('<br />')}</p>
-      <p>Tautan survei:</p>
+      <p>Yth. Pengguna Layanan Sekretariat Direktorat Jenderal Infrastruktur Digital,</p>
+      <p>Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada Pegawai, Sekretariat Direktorat Jenderal Infrastruktur Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.</p>
+      <p>Kami mohon kesediaan Bapak/Ibu/Saudara/i untuk mengisi survei pada tautan/link survei berikut :</p>
       <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
-      <p>Masukan Bapak/Ibu sangat berarti untuk peningkatan kualitas layanan kami.</p>
+      <p>Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 04 Juni s.d. 30 Juni 2026</p>
+      <p>Partisipasi Bapak/Ibu/Saudara/i sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Infrastruktur Digital</p>
       <p>Terima kasih.</p>
       <img src="${safeOpenPixel}" width="1" height="1" alt="" style="display:none" />
     `;
