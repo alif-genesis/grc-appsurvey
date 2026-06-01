@@ -24,6 +24,10 @@ type BlastHistory = {
 };
 
 const normalizeKey = (value: string) => value.trim().toLowerCase();
+const getRespondentKey = (record: SurveyRecord) => (
+  record.blastGroupId
+  || `${normalizeKey(record.profile.name)}-${normalizeKey(record.profile.directorate)}`
+);
 
 export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
@@ -112,8 +116,12 @@ export default function AdminPage() {
   const completedServicePercent = availableServices.length > 0
     ? Math.round((completedServiceCount / availableServices.length) * 100)
     : 0;
+  const completedRespondentCount = useMemo(
+    () => new Set(activeServiceRecords.map(getRespondentKey)).size,
+    [activeServiceRecords],
+  );
   const completedRespondentPercent = people.length > 0
-    ? Math.round((summary.overallResponded / people.length) * 100)
+    ? Math.round((completedRespondentCount / people.length) * 100)
     : 0;
   const serviceRanking = useMemo(() => (
     [...summary.serviceSummary].sort((left, right) => (
@@ -180,6 +188,31 @@ export default function AdminPage() {
     );
   };
 
+  const downloadSelectedServiceRowsExcel = async () => {
+    if (!selectedService || selectedServiceRows.length === 0) return;
+
+    const { default: writeXlsxFile } = await import('write-excel-file/browser');
+    const rows = selectedServiceRows.map((row, index) => ({
+      nomor: index + 1,
+      nama: row.name,
+      email: row.email || '-',
+      status: row.status,
+    }));
+    const columns = [
+      { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
+      { header: 'Nama', width: 28, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
+      { header: 'Email', width: 34, cell: (row: typeof rows[number]) => ({ value: row.email }) },
+      { header: 'Status', width: 18, cell: (row: typeof rows[number]) => ({ value: row.status }) },
+    ];
+    const serviceName = selectedService
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80);
+
+    await writeXlsxFile(rows, { columns }).toFile(`monitoring-pengisian-${serviceName}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -236,7 +269,7 @@ export default function AdminPage() {
               <div className="gauge-label">
                 <small>Responden</small>
                 <span>{completedRespondentPercent}%</span>
-                <p>{summary.overallResponded}/{people.length}</p>
+                <p>{completedRespondentCount}/{people.length}</p>
               </div>
             </div>
           </div>
@@ -334,9 +367,19 @@ export default function AdminPage() {
               <h2>Monitoring Pengisian Layanan</h2>
               <span>{selectedService}</span>
             </div>
-            <button type="button" className="text-button" onClick={() => setSelectedService('')}>
-              Tutup
-            </button>
+            <div className="inline-actions">
+              <button
+                type="button"
+                className="download-button compact-download-button"
+                onClick={() => { void downloadSelectedServiceRowsExcel(); }}
+                disabled={selectedServiceRows.length === 0}
+              >
+                Download Excel
+              </button>
+              <button type="button" className="text-button" onClick={() => setSelectedService('')}>
+                Tutup
+              </button>
+            </div>
           </div>
           <div className="service-summary-table-wrapper limited-table-scroll">
             <table className="service-summary-table">

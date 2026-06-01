@@ -315,7 +315,9 @@ export default function BlastingPage() {
         monitoringStatus,
       ].join(' ').toLowerCase().includes(query);
       const matchesService = !historyServiceFilter || row.serviceType === historyServiceFilter;
-      const matchesStatus = !historyStatusFilter || monitoringStatus === historyStatusFilter;
+      const matchesStatus = !historyStatusFilter
+        || monitoringStatus === historyStatusFilter
+        || (historyStatusFilter === 'Belum isi' && row.status !== 'Gagal' && !row.submittedAt);
       return matchesSearch && matchesService && matchesStatus;
     }).sort((left, right) => (
       new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
@@ -696,7 +698,7 @@ export default function BlastingPage() {
       setBlastNotice(`Email blast selesai: ${successCount} sukses, ${failedCount} gagal/dilewati dari ${recipients.length} penerima.`);
       setBlastResultDialog({
         title: 'Blast Email Selesai',
-        message: 'Hasil lengkap sudah masuk ke Riwayat Blast.',
+        message: 'Sukses/gagal dihitung per layanan. Penerima dihitung per orang.',
         successCount,
         failedCount,
         totalCount: recipients.length,
@@ -1156,6 +1158,7 @@ export default function BlastingPage() {
             Filter Status
             <select value={historyStatusFilter} onChange={(event) => setHistoryStatusFilter(event.target.value)}>
               <option value="">Semua status</option>
+              <option value="Belum isi">Belum isi</option>
               <option value="Terima, belum buka email/link">Terima, belum buka email/link</option>
               <option value="Terima, buka email, belum isi">Terima, buka email, belum isi</option>
               <option value="Terima, buka link, belum isi">Terima, buka link, belum isi</option>
@@ -1363,7 +1366,7 @@ export default function BlastingPage() {
                 <strong>{blastResultDialog.failedCount}</strong>
               </div>
               <div>
-                <span>Total</span>
+                <span>Penerima</span>
                 <strong>{blastResultDialog.totalCount}</strong>
               </div>
             </div>
