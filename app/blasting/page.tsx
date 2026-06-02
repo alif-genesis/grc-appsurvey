@@ -823,7 +823,24 @@ export default function BlastingPage() {
       const response = await fetch(withBasePath('/api/blast/history/export'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: rowsToDownload.map((row) => row.id) }),
+        body: JSON.stringify({
+          records: rowsToDownload.map((row) => ({
+            id: row.id,
+            createdAt: row.createdAt,
+            personName: row.personName,
+            email: row.email,
+            senderLabel: row.senderLabel,
+            senderEmail: row.senderEmail,
+            serviceType: row.serviceType,
+            surveyLink: row.surveyLink,
+            status: row.status,
+            error: row.error,
+            sentAt: row.sentAt,
+            openedAt: row.openedAt,
+            clickedAt: row.clickedAt,
+            submittedAt: row.submittedAt,
+          })),
+        }),
       });
 
       if (!response.ok) {

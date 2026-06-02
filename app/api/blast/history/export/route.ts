@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import writeXlsxFile from 'write-excel-file/node';
-import { formatServerError, getSupabase, scopeFilter } from '../../../../supabase-server';
+import { formatServerError } from '../../../../supabase-server';
 
-type BlastExportRow = {
+type BlastExportRecord = {
   id: string;
-  created_at: string;
-  person_name: string;
+  createdAt: string;
+  personName: string;
   email: string;
-  sender_label?: string | null;
-  sender_email?: string | null;
-  service_type: string;
-  survey_link: string;
-  send_status: 'Sukses' | 'Gagal' | 'Pending';
-  error: string | null;
-  sent_at: string | null;
-  opened_at: string | null;
-  clicked_at: string | null;
-  submitted_at: string | null;
+  senderLabel?: string | null;
+  senderEmail?: string | null;
+  serviceType: string;
+  surveyLink: string;
+  status: 'Sukses' | 'Gagal' | 'Pending';
+  error?: string | null;
+  sentAt?: string | null;
+  openedAt?: string | null;
+  clickedAt?: string | null;
+  submittedAt?: string | null;
 };
-
-const EXPORT_SELECT = 'id, created_at, person_name, email, sender_label, sender_email, service_type, survey_link, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
-const LEGACY_EXPORT_SELECT = 'id, created_at, person_name, email, service_type, survey_link, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
 
 const getSenderDisplayLabel = (row: { senderEmail?: string | null; senderLabel?: string | null }) => {
   if (row.senderEmail?.toLowerCase() === 'tusesdjid@mail.komdigi.go.id') {
@@ -35,7 +32,7 @@ const formatDateTime = (value?: string | null) => (
 );
 
 const getMonitoringStatus = (row: {
-  status: BlastExportRow['send_status'];
+  status: BlastExportRecord['status'];
   sentAt?: string | null;
   openedAt?: string | null;
   clickedAt?: string | null;
@@ -49,64 +46,36 @@ const getMonitoringStatus = (row: {
   return 'Belum terkirim';
 };
 
-const mapRow = (row: BlastExportRow) => ({
-  id: row.id,
-  createdAt: row.created_at,
-  personName: row.person_name,
-  email: row.email,
-  senderLabel: row.sender_label ?? '',
-  senderEmail: row.sender_email ?? '',
-  serviceType: row.service_type,
-  surveyLink: row.survey_link,
-  status: row.send_status,
-  error: row.error ?? '',
-  sentAt: row.sent_at,
-  openedAt: row.opened_at,
-  clickedAt: row.clicked_at,
-  submittedAt: row.submitted_at,
-});
+const isExportRecord = (record: unknown): record is BlastExportRecord => (
+  Boolean(record)
+  && typeof record === 'object'
+  && typeof (record as BlastExportRecord).id === 'string'
+  && typeof (record as BlastExportRecord).createdAt === 'string'
+  && typeof (record as BlastExportRecord).personName === 'string'
+  && typeof (record as BlastExportRecord).email === 'string'
+  && typeof (record as BlastExportRecord).serviceType === 'string'
+  && typeof (record as BlastExportRecord).surveyLink === 'string'
+  && ['Sukses', 'Gagal', 'Pending'].includes((record as BlastExportRecord).status)
+);
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({})) as { ids?: unknown };
-    const ids = Array.isArray(body.ids)
-      ? body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+    const body = await request.json().catch(() => ({})) as { records?: unknown };
+    const records = Array.isArray(body.records)
+      ? body.records.filter(isExportRecord)
       : [];
 
-    if (ids.length === 0) {
+    if (records.length === 0) {
       return NextResponse.json({ error: 'Tidak ada riwayat untuk didownload.' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
-    const query = supabase
-      .from('blast_records')
-      .select(EXPORT_SELECT)
-      .eq('channel', 'Email')
-      .in('id', ids)
-      .order('created_at', { ascending: true });
-    let { data, error }: { data: unknown; error: unknown } = await scopeFilter(query, true, request);
-
-    if (error) {
-      const legacyQuery = supabase
-        .from('blast_records')
-        .select(LEGACY_EXPORT_SELECT)
-        .eq('channel', 'Email')
-        .in('id', ids)
-        .order('created_at', { ascending: true });
-      const legacyResult = await scopeFilter(legacyQuery, true, request);
-      data = legacyResult.data;
-      error = legacyResult.error;
-    }
-
-    if (error) throw error;
-
-    const rows = (data as BlastExportRow[]).map(mapRow).map((row, index) => ({
+    const rows = records.map((row, index) => ({
       nomor: index + 1,
       waktu: formatDateTime(row.createdAt),
       nama: row.personName,
       email: row.email,
       sender: getSenderDisplayLabel(row),
-      senderEmail: row.senderEmail,
+      senderEmail: row.senderEmail || '',
       layanan: row.serviceType,
       link: row.surveyLink,
       terkirim: formatDateTime(row.sentAt),
@@ -114,7 +83,7 @@ export async function POST(request: NextRequest) {
       linkDibuka: formatDateTime(row.clickedAt),
       sudahIsi: formatDateTime(row.submittedAt),
       monitoring: getMonitoringStatus(row),
-      error: row.error,
+      error: row.error || '',
     }));
     const columns = [
       { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
