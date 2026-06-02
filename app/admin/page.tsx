@@ -101,13 +101,21 @@ export default function AdminPage() {
     });
     return acc;
   }, {}), [people]);
+  const blastTargetCounts = useMemo(() => history.reduce<Record<string, number>>((acc, row) => {
+    if (!row.serviceType) return acc;
+    acc[row.serviceType] = (acc[row.serviceType] ?? 0) + 1;
+    return acc;
+  }, {}), [history]);
+  const surveyTargetCounts = useMemo(() => (
+    Object.keys(blastTargetCounts).length > 0 ? blastTargetCounts : servicePopulationCounts
+  ), [blastTargetCounts, servicePopulationCounts]);
   const activeServiceRecords = useMemo(
     () => records.filter((record) => availableServices.includes(record.profile.serviceType)),
     [availableServices, records],
   );
   const summary = useMemo(
-    () => getSurveySummary(activeServiceRecords, availableServices, servicePopulationCounts),
-    [activeServiceRecords, availableServices, servicePopulationCounts],
+    () => getSurveySummary(activeServiceRecords, availableServices, surveyTargetCounts),
+    [activeServiceRecords, availableServices, surveyTargetCounts],
   );
   const completedServiceCount = useMemo(
     () => summary.serviceSummary.filter((row) => row.percent >= 100).length,
@@ -170,12 +178,12 @@ export default function AdminPage() {
 
   const downloadSummaryExcel = async () => {
     const { downloadAdminSummaryExcel } = await import('./report-utils');
-    await downloadAdminSummaryExcel(activeServiceRecords, availableServices, servicePopulationCounts);
+    await downloadAdminSummaryExcel(activeServiceRecords, availableServices, surveyTargetCounts);
   };
 
   const downloadSummaryPDF = async () => {
     const { downloadAdminSummaryPDF } = await import('./report-utils');
-    await downloadAdminSummaryPDF(activeServiceRecords, availableServices, servicePopulationCounts);
+    await downloadAdminSummaryPDF(activeServiceRecords, availableServices, surveyTargetCounts);
   };
 
   const downloadFulfillmentRankingPDF = async () => {
@@ -183,7 +191,7 @@ export default function AdminPage() {
     await downloadSurveyFulfillmentRankingPDF(
       activeServiceRecords,
       availableServices,
-      servicePopulationCounts,
+      surveyTargetCounts,
       people.length,
     );
   };
