@@ -22,6 +22,7 @@ export default function ControlPanelPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [editDrafts, setEditDrafts] = useState<Record<string, { name: string; description: string }>>({});
+  const [deleteDialogCampaign, setDeleteDialogCampaign] = useState<SurveyCampaign | null>(null);
 
   const loadCampaigns = async () => {
     setIsLoading(true);
@@ -134,6 +135,11 @@ export default function ControlPanelPage() {
     }
   };
 
+  const requestDeleteCampaign = (campaign: SurveyCampaign) => {
+    if (isSaving) return;
+    setDeleteDialogCampaign(campaign);
+  };
+
   const deleteCampaign = async (id: string) => {
     setIsSaving(true);
     setMessage('Menghapus survey...');
@@ -150,6 +156,7 @@ export default function ControlPanelPage() {
       setMessage(error instanceof Error ? error.message : 'Gagal menghapus survey.');
     } finally {
       setIsSaving(false);
+      setDeleteDialogCampaign(null);
     }
   };
 
@@ -274,7 +281,7 @@ export default function ControlPanelPage() {
                         <button type="button" className="text-button" onClick={() => startEditCampaign(campaign)} disabled={isSaving}>
                           Edit
                         </button>
-                        <button type="button" className="text-button danger-button" onClick={() => deleteCampaign(campaign.id)} disabled={isSaving}>
+                        <button type="button" className="text-button danger-button" onClick={() => requestDeleteCampaign(campaign)} disabled={isSaving}>
                           Hapus
                         </button>
                       </>
@@ -289,6 +296,39 @@ export default function ControlPanelPage() {
           </div>
         </section>
       </section>
+
+      {deleteDialogCampaign && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="survey-delete-title">
+          <div className="confirm-modal">
+            <div>
+              <p className="agency">Konfirmasi Hapus</p>
+              <h2 id="survey-delete-title">Hapus Survey?</h2>
+            </div>
+            <p>
+              Aksi ini akan menghapus survey <strong>{deleteDialogCampaign.name}</strong>.
+            </p>
+            <p className="confirm-warning">Data survey yang sudah dihapus tidak bisa dikembalikan dari halaman ini.</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="admin-link secondary-admin-link"
+                onClick={() => setDeleteDialogCampaign(null)}
+                disabled={isSaving}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="download-button danger-download-button"
+                onClick={() => { void deleteCampaign(deleteDialogCampaign.id); }}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AdminFooter />
     </main>
