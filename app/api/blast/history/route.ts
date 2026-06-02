@@ -147,13 +147,16 @@ export async function DELETE(request: NextRequest) {
       ? body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
       : [];
     const supabase = getSupabase();
-    let query = supabase.from('blast_records').delete();
+    let query = supabase.from('blast_records').delete().select('id');
     query = ids.length > 0 ? query.in('id', ids) : query.neq('id', '');
-    const { error } = await scopeFilter(query, true, request);
+    const { data, error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
-    return NextResponse.json({ ok: true, deletedIds: ids });
+    return NextResponse.json({
+      ok: true,
+      deletedIds: (data as Array<{ id: string }> | null)?.map((row) => row.id) ?? [],
+    });
   } catch (error) {
     return NextResponse.json(
       { error: formatServerError(error, 'Gagal membersihkan riwayat blast.') },

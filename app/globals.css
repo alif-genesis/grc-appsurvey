@@ -2045,6 +2045,31 @@ select {
   box-shadow: 0 30px 90px rgba(15, 23, 42, 0.3);
 }
 
+.confirm-modal {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.3);
+}
+
+.confirm-modal h2,
+.confirm-modal p {
+  margin: 0;
+}
+
+.confirm-warning {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.danger-download-button {
+  background: #b91c1c;
+  box-shadow: 0 12px 28px rgba(185, 28, 28, 0.2);
+}
+
 .blast-result-modal h2,
 .blast-result-modal p {
   margin: 0;

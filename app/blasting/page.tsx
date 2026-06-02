@@ -52,6 +52,11 @@ type BlastResultDialog = {
   failedCount: number;
   totalCount: number;
 };
+type HistoryDeleteDialog = {
+  kind: 'clear' | 'selected';
+  count: number;
+  ids?: string[];
+};
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
 const MAX_EMAIL_RECIPIENTS = 5;
@@ -83,6 +88,19 @@ const getSenderDisplayLabel = (row: Pick<BlastHistory, 'senderEmail' | 'senderLa
 const formatDateTime = (value?: string | null) => (
   value ? new Date(value).toLocaleString('id-ID') : '-'
 );
+
+const downloadBlobFile = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+  }, 0);
+};
 
 const getMonitoringStatus = (row: BlastHistory) => {
   if (row.status === 'Gagal') return 'Gagal dikirim';
@@ -185,6 +203,7 @@ export default function BlastingPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
   const [isResettingBlast, setIsResettingBlast] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPeopleLoading, setIsPeopleLoading] = useState(false);
   const [blastNotice, setBlastNotice] = useState('');
   const [blastResultDialog, setBlastResultDialog] = useState<BlastResultDialog | null>(null);
@@ -196,6 +215,8 @@ export default function BlastingPage() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
   const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
+  const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
+  const [historyDeleteDialog, setHistoryDeleteDialog] = useState<HistoryDeleteDialog | null>(null);
   const [activeCampaignId, setActiveCampaignId] = useState('');
   const [emailSenders, setEmailSenders] = useState<EmailSender[]>([]);
   const [selectedSenderId, setSelectedSenderId] = useState('');
@@ -720,8 +741,13 @@ export default function BlastingPage() {
     }
   };
 
+  const requestClearHistory = () => {
+    if (history.length === 0 || isDeletingHistory) return;
+    setHistoryDeleteDialog({ kind: 'clear', count: history.length });
+  };
+
   const clearHistory = async () => {
-    if (!window.confirm('Bersihkan seluruh riwayat blast untuk survey aktif?')) return;
+    setIsDeletingHistory(true);
 
     try {
       const response = await fetch(withBasePath('/api/blast/history'), { method: 'DELETE' });
@@ -734,81 +760,94 @@ export default function BlastingPage() {
       setBlastNotice('Riwayat blast dibersihkan.');
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal membersihkan riwayat blast.');
+    } finally {
+      setIsDeletingHistory(false);
+      setHistoryDeleteDialog(null);
     }
   };
 
-  const deleteSelectedHistory = async () => {
-    if (selectedHistoryIds.length === 0) return;
-    const confirmed = window.confirm(`Hapus ${selectedHistoryIds.length} riwayat blast yang dipilih?`);
-    if (!confirmed) return;
+  const requestDeleteSelectedHistory = () => {
+    if (selectedHistoryIds.length === 0 || isDeletingHistory) return;
+    setHistoryDeleteDialog({
+      kind: 'selected',
+      count: selectedHistoryIds.length,
+      ids: [...selectedHistoryIds],
+    });
+  };
 
+  const deleteSelectedHistory = async (idsToDelete = selectedHistoryIds) => {
+    if (idsToDelete.length === 0) return;
     setIsDeletingHistory(true);
 
     try {
       const response = await fetch(withBasePath('/api/blast/history'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedHistoryIds }),
+        body: JSON.stringify({ ids: idsToDelete }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as { deletedIds?: string[]; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Gagal menghapus riwayat blast pilihan.');
 
-      setHistory((current) => current.filter((row) => !selectedHistoryIds.includes(row.id)));
-      setSelectedHistoryIds([]);
-      setBlastNotice('Riwayat blast pilihan berhasil dihapus.');
+      const deletedIds = payload.deletedIds?.length ? payload.deletedIds : [];
+      if (deletedIds.length === 0) {
+        throw new Error('Tidak ada riwayat terpilih yang terhapus. Refresh riwayat lalu coba lagi.');
+      }
+
+      setHistory((current) => current.filter((row) => !deletedIds.includes(row.id)));
+      setSelectedHistoryIds((current) => current.filter((id) => !deletedIds.includes(id)));
+      setBlastNotice(`${deletedIds.length} riwayat blast pilihan berhasil dihapus.`);
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal menghapus riwayat blast pilihan.');
     } finally {
       setIsDeletingHistory(false);
+      setHistoryDeleteDialog(null);
     }
+  };
+
+  const confirmHistoryDelete = () => {
+    if (!historyDeleteDialog) return;
+    if (historyDeleteDialog.kind === 'clear') {
+      void clearHistory();
+      return;
+    }
+    void deleteSelectedHistory(historyDeleteDialog.ids ?? []);
   };
 
   const downloadHistoryExcel = async (rowsToDownload = filteredHistory, filenamePrefix = 'riwayat-blast') => {
     if (rowsToDownload.length === 0) return;
 
-    const { default: writeXlsxFile } = await import('write-excel-file/browser');
-    const rows = rowsToDownload.map((row, index) => ({
-      nomor: index + 1,
-      waktu: formatDateTime(row.createdAt),
-      nama: row.personName,
-      email: row.email,
-      sender: getSenderDisplayLabel(row),
-      senderEmail: row.senderEmail || '',
-      layanan: row.serviceType,
-      link: row.surveyLink,
-      terkirim: formatDateTime(row.sentAt),
-      emailDibuka: formatDateTime(row.openedAt),
-      linkDibuka: formatDateTime(row.clickedAt),
-      sudahIsi: formatDateTime(row.submittedAt),
-      monitoring: getMonitoringStatus(row),
-      error: row.error || '',
-    }));
-    const columns = [
-      { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
-      { header: 'Waktu', width: 22, cell: (row: typeof rows[number]) => ({ value: row.waktu }) },
-      { header: 'Nama', width: 26, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
-      { header: 'Email', width: 34, cell: (row: typeof rows[number]) => ({ value: row.email }) },
-      { header: 'Sender', width: 24, cell: (row: typeof rows[number]) => ({ value: row.sender }) },
-      { header: 'Email Sender', width: 34, cell: (row: typeof rows[number]) => ({ value: row.senderEmail }) },
-      { header: 'Layanan', width: 52, cell: (row: typeof rows[number]) => ({ value: row.layanan }) },
-      { header: 'Link', width: 72, cell: (row: typeof rows[number]) => ({ value: row.link }) },
-      { header: 'Terkirim', width: 22, cell: (row: typeof rows[number]) => ({ value: row.terkirim }) },
-      { header: 'Email Dibuka', width: 22, cell: (row: typeof rows[number]) => ({ value: row.emailDibuka }) },
-      { header: 'Link Dibuka', width: 22, cell: (row: typeof rows[number]) => ({ value: row.linkDibuka }) },
-      { header: 'Sudah Isi', width: 22, cell: (row: typeof rows[number]) => ({ value: row.sudahIsi }) },
-      { header: 'Monitoring', width: 34, cell: (row: typeof rows[number]) => ({ value: row.monitoring }) },
-      { header: 'Error', width: 44, cell: (row: typeof rows[number]) => ({ value: row.error }) },
-    ];
+    setIsDownloadingHistory(true);
+    setBlastNotice('Membuat file Excel riwayat blast...');
 
-    await writeXlsxFile(rows, { columns }).toFile(`${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    try {
+      const response = await fetch(withBasePath('/api/blast/history/export'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: rowsToDownload.map((row) => row.id) }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(payload.error || 'Download Excel riwayat blast gagal.');
+      }
+
+      const blob = await response.blob();
+      const filename = `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      downloadBlobFile(blob, filename);
+      setBlastNotice(`File Excel riwayat blast dibuat (${rowsToDownload.length} baris).`);
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Download Excel riwayat blast gagal.');
+    } finally {
+      setIsDownloadingHistory(false);
+    }
+  };
+
+  const requestResetBlast = () => {
+    if (isResettingBlast || isEmailBlasting) return;
+    setIsResetConfirmOpen(true);
   };
 
   const resetBlast = async () => {
-    const confirmed = window.confirm(
-      'Reset blast akan menghapus riwayat blast, status link, dan seluruh response survey untuk survey aktif. Daftar responden, layanan, dan satuan kerja tetap aman. Lanjutkan?',
-    );
-    if (!confirmed) return;
-
     setIsResettingBlast(true);
     setBlastNotice('Mereset data blast survey aktif...');
 
@@ -836,6 +875,7 @@ export default function BlastingPage() {
       setBlastNotice(error instanceof Error ? error.message : 'Reset blast gagal diproses.');
     } finally {
       setIsResettingBlast(false);
+      setIsResetConfirmOpen(false);
     }
   };
 
@@ -866,7 +906,7 @@ export default function BlastingPage() {
           <button
             type="button"
             className="text-button danger-button"
-            onClick={resetBlast}
+            onClick={requestResetBlast}
             disabled={isResettingBlast || isEmailBlasting}
           >
             {isResettingBlast ? 'Mereset...' : 'Reset Blast'}
@@ -1125,13 +1165,20 @@ export default function BlastingPage() {
                 type="button"
                 className="download-button compact-download-button"
                 onClick={() => { void downloadHistoryExcel(); }}
-                disabled={filteredHistory.length === 0}
+                disabled={filteredHistory.length === 0 || isDownloadingHistory}
               >
-                Download Excel
+                {isDownloadingHistory ? 'Membuat Excel...' : 'Download Excel'}
               </button>
             )}
             {history.length > 0 && (
-              <button type="button" className="text-button" onClick={clearHistory}>Bersihkan Riwayat</button>
+              <button
+                type="button"
+                className="text-button"
+                onClick={requestClearHistory}
+                disabled={isDeletingHistory}
+              >
+                Bersihkan Riwayat
+              </button>
             )}
           </div>
         </div>
@@ -1178,7 +1225,7 @@ export default function BlastingPage() {
             <button
               type="button"
               className="text-button danger-button"
-              onClick={deleteSelectedHistory}
+              onClick={requestDeleteSelectedHistory}
               disabled={selectedHistoryIds.length === 0 || isDeletingHistory}
             >
               {isDeletingHistory ? 'Menghapus...' : `Hapus Riwayat${selectedHistoryIds.length ? ` (${selectedHistoryIds.length})` : ''}`}
@@ -1344,6 +1391,74 @@ export default function BlastingPage() {
                 disabled={isImporting}
               >
                 Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {historyDeleteDialog && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="history-delete-title">
+          <div className="confirm-modal">
+            <div>
+              <p className="agency">Konfirmasi Hapus</p>
+              <h2 id="history-delete-title">
+                {historyDeleteDialog.kind === 'clear' ? 'Bersihkan Riwayat Blast?' : 'Hapus Riwayat Terpilih?'}
+              </h2>
+            </div>
+            <p>
+              {historyDeleteDialog.kind === 'clear'
+                ? `Aksi ini akan menghapus seluruh ${historyDeleteDialog.count} riwayat blast untuk survey aktif.`
+                : `Aksi ini akan menghapus ${historyDeleteDialog.count} riwayat blast yang sedang dipilih.`}
+            </p>
+            <p className="confirm-warning">Data yang sudah dihapus tidak bisa dikembalikan dari halaman ini.</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="admin-link secondary-admin-link"
+                onClick={() => setHistoryDeleteDialog(null)}
+                disabled={isDeletingHistory}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="download-button danger-download-button"
+                onClick={confirmHistoryDelete}
+                disabled={isDeletingHistory}
+              >
+                {isDeletingHistory ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isResetConfirmOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reset-blast-title">
+          <div className="confirm-modal">
+            <div>
+              <p className="agency">Konfirmasi Reset</p>
+              <h2 id="reset-blast-title">Reset Blast?</h2>
+            </div>
+            <p>
+              Aksi ini akan menghapus riwayat blast, status link, dan seluruh jawaban survey untuk survey aktif.
+            </p>
+            <p className="confirm-warning">Daftar responden, layanan, dan satuan kerja tetap aman.</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="admin-link secondary-admin-link"
+                onClick={() => setIsResetConfirmOpen(false)}
+                disabled={isResettingBlast}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="download-button danger-download-button"
+                onClick={() => { void resetBlast(); }}
+                disabled={isResettingBlast}
+              >
+                {isResettingBlast ? 'Mereset...' : 'Ya, Reset'}
               </button>
             </div>
           </div>
