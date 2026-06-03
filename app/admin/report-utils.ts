@@ -395,6 +395,8 @@ const drawRankingReportFrame = async (
   completedServices: number,
   totalServices: number,
   completedRespondents: number,
+  completedSurveys: number,
+  totalSurveys: number,
 ) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -456,27 +458,30 @@ const drawRankingReportFrame = async (
 
   const servicePercent = totalServices > 0 ? Math.round((completedServices / totalServices) * 100) : 0;
   const respondentPercent = totalRespondents > 0 ? Math.round((completedRespondents / totalRespondents) * 100) : 0;
+  const surveyPercent = totalSurveys > 0 ? Math.round((completedSurveys / totalSurveys) * 100) : 0;
   const drawMetricTable = (x: number, title: string, value: string, percent: number) => {
+    const width = 160;
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(x, 282, 236, 54, 7, 7, 'F');
+    doc.roundedRect(x, 282, width, 54, 7, 7, 'F');
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(x, 282, 236, 54, 7, 7, 'S');
+    doc.roundedRect(x, 282, width, 54, 7, 7, 'S');
     doc.setFillColor(15, 78, 184);
-    doc.roundedRect(x, 282, 236, 18, 7, 7, 'F');
+    doc.roundedRect(x, 282, width, 18, 7, 7, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(7);
     doc.text(title, x + 10, 295);
     doc.setTextColor(10, 35, 72);
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.text(value, x + 10, 320);
     doc.setTextColor(15, 78, 184);
-    doc.setFontSize(13);
-    doc.text(`${percent}%`, x + 222, 321, { align: 'right' });
+    doc.setFontSize(12);
+    doc.text(`${percent}%`, x + width - 12, 321, { align: 'right' });
   };
 
-  drawMetricTable(40, 'PEMENUHAN LAYANAN SELESAI', `${completedServices}/${totalServices} layanan`, servicePercent);
-  drawMetricTable(310, 'RESPONDEN SUDAH MENGISI', `${completedRespondents}/${totalRespondents} responden`, respondentPercent);
+  drawMetricTable(40, 'LAYANAN SELESAI', `${completedServices}/${totalServices} layanan`, servicePercent);
+  drawMetricTable(218, 'RESPONDEN MENGISI', `${completedRespondents}/${totalRespondents} responden`, respondentPercent);
+  drawMetricTable(396, 'SURVEY TERISI', `${completedSurveys}/${totalSurveys} survey`, surveyPercent);
 
   doc.setFillColor(15, 78, 184);
   doc.roundedRect(36, 360, 170, 28, 5, 5, 'F');
@@ -506,6 +511,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
   availableServices = serviceTypes,
   populationCounts: Record<string, number> = {},
   totalRespondents?: number,
+  completedRespondents?: number,
 ) => {
   const summary = getSurveySummary(records, availableServices, populationCounts);
   const rows = [...summary.serviceSummary].sort((left, right) => (
@@ -518,6 +524,9 @@ export const downloadSurveyFulfillmentRankingPDF = async (
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const period = getDownloadedAtText();
   const respondentTotal = totalRespondents ?? summary.uniqueRespondents;
+  const completedRespondentTotal = completedRespondents ?? new Set(records.map((record) => (
+    `${record.blastGroupId || ''}-${record.profile.name}-${record.profile.directorate}`
+  ))).size;
   const completedServices = rows.filter((row) => row.percent >= 100).length;
 
   for (let pageIndex = 0; pageIndex < pages; pageIndex += 1) {
@@ -530,7 +539,9 @@ export const downloadSurveyFulfillmentRankingPDF = async (
       respondentTotal,
       completedServices,
       rows.length,
+      completedRespondentTotal,
       summary.overallResponded,
+      summary.overallTarget,
     );
 
     doc.setFillColor(255, 255, 255);

@@ -193,6 +193,7 @@ export default function AdminPage() {
       availableServices,
       surveyTargetCounts,
       people.length,
+      completedRespondentCount,
     );
   };
 
