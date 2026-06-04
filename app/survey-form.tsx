@@ -36,6 +36,8 @@ type SurveyContext = {
   id: string;
   name: string;
   description: string;
+  senderLabel?: string;
+  senderEmail?: string;
 };
 
 type BlastContext = {
@@ -44,6 +46,14 @@ type BlastContext = {
 };
 
 const getSurveyPeriodText = (context: SurveyContext) => {
+  const normalizedSender = `${context.senderLabel || ''} ${context.senderEmail || ''}`.toLowerCase();
+  if (normalizedSender.includes('sekretariat djid') || normalizedSender.includes('tusesdjid@mail.komdigi.go.id')) {
+    return '05 Juni 2026 s.d. 30 Juni 2026';
+  }
+  if (normalizedSender.includes('tu.dirjen_djed@mail.komdigi.go.id')) {
+    return '02 Juni 2026 s.d. 30 Juni 2026';
+  }
+
   const normalizedContext = `${context.id} ${context.name} ${context.description}`.toLowerCase();
   return normalizedContext.includes('infrastruktur digital')
     ? '04 Juni s.d. 30 Juni 2026'

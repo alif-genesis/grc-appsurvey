@@ -71,6 +71,7 @@ const buildSummarySheet = (summary: ReturnType<typeof getSurveySummary>): Row[] 
 
 const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: CalculationScale): Row[] => {
   const header = [
+    'No.',
     'Tanggal',
     'Nama Lengkap',
     'Satuan Kerja',
@@ -90,7 +91,8 @@ const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: Calcula
 
   return [
     header.map((item) => cell(item, true)),
-    ...records.map((record) => [
+    ...records.map((record, index) => [
+      index + 1,
       new Date(record.createdAt).toLocaleString('id-ID'),
       record.profile.name,
       record.profile.directorate,
@@ -128,6 +130,7 @@ export const downloadMonitoringExcel = async (records: SurveyRecord[], calculati
     sheet: 'Response Detail',
     data: buildMonitoringSheet(records, calculationScale),
     columns: [
+      { width: 8 },
       { width: 22 },
       { width: 24 },
       { width: 30 },
@@ -674,6 +677,7 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[], calculation
     ...styledAutoTablePageHooks(),
     startY: 242,
     head: [[
+      'No.',
       'Tanggal',
       'Nama',
       'Satuan Kerja',
@@ -682,8 +686,9 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[], calculation
       ...antiCorruptionQuestions.map((_, index) => `A${index + 1}`),
       'Kritik/Saran',
     ]],
-    body: records.map((record) => {
+    body: records.map((record, index) => {
       return [
+        index + 1,
         new Date(record.createdAt).toLocaleString('id-ID'),
         record.profile.name,
         record.profile.directorate,

@@ -8,13 +8,52 @@ type CampaignRow = {
   description: string | null;
 };
 
+type BlastContextRow = {
+  campaign_id: string | null;
+  sender_label?: string | null;
+  sender_email?: string | null;
+};
+
 const defaultCampaign = {
   id: DEFAULT_SURVEY_CAMPAIGN_ID,
   name: 'Biro Hubungan Masyarakat',
   description: 'Survey Kepuasan Layanan Biro Hubungan Masyarakat',
 };
 
-const getContextCampaignId = async (request: NextRequest) => {
+const getBlastIdentifiers = (request: NextRequest) => ({
+  blastId: request.nextUrl.searchParams.get('blastId')?.trim() || request.cookies.get('genesis_blast_id')?.value,
+  blastGroupId: request.nextUrl.searchParams.get('blastGroupId')?.trim() || request.cookies.get('genesis_blast_group_id')?.value,
+});
+
+const getBlastContext = async (request: NextRequest) => {
+  const { blastId, blastGroupId } = getBlastIdentifiers(request);
+  if (!blastId && !blastGroupId) return null;
+
+  const supabase = getSupabase();
+  const query = supabase
+    .from('blast_records')
+    .select('campaign_id, sender_label, sender_email')
+    .limit(1);
+  const { data, error } = blastId
+    ? await query.eq('id', blastId)
+    : await query.eq('blast_group_id', blastGroupId);
+
+  if (error) {
+    const legacyQuery = supabase
+      .from('blast_records')
+      .select('campaign_id')
+      .limit(1);
+    const legacyResult = blastId
+      ? await legacyQuery.eq('id', blastId)
+      : await legacyQuery.eq('blast_group_id', blastGroupId);
+    if (legacyResult.error) throw legacyResult.error;
+    return (legacyResult.data?.[0] as BlastContextRow | undefined) ?? null;
+  }
+
+  return (data?.[0] as BlastContextRow | undefined) ?? null;
+};
+
+const getContextCampaignId = async (request: NextRequest, blastContext: BlastContextRow | null) => {
   const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
   if (requestedScope) return requestedScope;
 
@@ -22,26 +61,13 @@ const getContextCampaignId = async (request: NextRequest) => {
   const adminScope = request.cookies.get(ADMIN_SURVEY_COOKIE)?.value;
   if (adminOnly && adminScope) return adminScope;
 
-  const blastId = request.nextUrl.searchParams.get('blastId')?.trim() || request.cookies.get('genesis_blast_id')?.value;
-  const blastGroupId = request.nextUrl.searchParams.get('blastGroupId')?.trim() || request.cookies.get('genesis_blast_group_id')?.value;
-  if (!blastId && !blastGroupId) return adminScope || getSurveyScope(request);
-
-  const supabase = getSupabase();
-  const query = supabase
-    .from('blast_records')
-    .select('campaign_id')
-    .limit(1);
-  const { data, error } = blastId
-    ? await query.eq('id', blastId)
-    : await query.eq('blast_group_id', blastGroupId);
-
-  if (error) throw error;
-  return data?.[0]?.campaign_id || adminScope || getSurveyScope(request);
+  return blastContext?.campaign_id || adminScope || getSurveyScope(request);
 };
 
 export async function GET(request: NextRequest) {
   try {
-    const campaignId = await getContextCampaignId(request);
+    const blastContext = await getBlastContext(request);
+    const campaignId = await getContextCampaignId(request, blastContext);
     const { data, error } = await getSupabase()
       .from('survey_campaigns')
       .select('id, name, description')
@@ -56,6 +82,8 @@ export async function GET(request: NextRequest) {
         id: campaign.id,
         name: campaign.name,
         description: campaign.description ?? '',
+        senderLabel: blastContext?.sender_label ?? '',
+        senderEmail: blastContext?.sender_email ?? '',
       } : defaultCampaign,
     });
   } catch (error) {

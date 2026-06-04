@@ -292,6 +292,7 @@ export default function MonitoringPage() {
             <table className="service-summary-table monitoring-table">
               <thead>
                 <tr>
+                  <th>No.</th>
                   <th>Tanggal</th>
                   <th>Nama Lengkap</th>
                   <th>Satuan Kerja</th>
@@ -312,8 +313,9 @@ export default function MonitoringPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredResponseRecords.map((record) => (
+                {filteredResponseRecords.map((record, index) => (
                   <tr key={record.id}>
+                    <td>{index + 1}</td>
                     <td>{new Date(record.createdAt).toLocaleString('id-ID')}</td>
                     <td>{record.profile.name || '-'}</td>
                     <td>{record.profile.directorate || '-'}</td>
