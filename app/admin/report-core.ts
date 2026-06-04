@@ -77,9 +77,8 @@ export const getSurveySummary = (
 
   const serviceSummary = targets.map((service) => {
     const responded = filteredCounts[service.name] ?? 0;
-    const hasExplicitTarget = Object.prototype.hasOwnProperty.call(populationCounts, service.name);
-    const population = hasExplicitTarget ? populationCounts[service.name] : responded;
-    const target = hasExplicitTarget ? population : getKrejcieMorganSampleSize(population);
+    const population = populationCounts[service.name] ?? responded;
+    const target = getKrejcieMorganSampleSize(population);
     const gap = Math.max(0, target - responded);
     const percent = target > 0 ? Math.round((responded / target) * 100) : 0;
     return {

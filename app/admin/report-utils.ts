@@ -527,6 +527,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
   const completedRespondentTotal = completedRespondents ?? new Set(records.map((record) => (
     `${record.blastGroupId || ''}-${record.profile.name}-${record.profile.directorate}`
   ))).size;
+  const totalSurveyPopulation = summary.serviceSummary.reduce((sum, row) => sum + row.population, 0);
   const completedServices = rows.filter((row) => row.percent >= 100).length;
 
   for (let pageIndex = 0; pageIndex < pages; pageIndex += 1) {
@@ -541,7 +542,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
       rows.length,
       completedRespondentTotal,
       summary.overallResponded,
-      summary.overallTarget,
+      totalSurveyPopulation,
     );
 
     doc.setFillColor(255, 255, 255);
