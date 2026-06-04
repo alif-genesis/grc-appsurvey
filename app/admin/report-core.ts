@@ -81,6 +81,7 @@ export const getSurveySummary = (
     const target = getKrejcieMorganSampleSize(population);
     const gap = Math.max(0, target - responded);
     const percent = target > 0 ? Math.round((responded / target) * 100) : 0;
+    const fulfillmentPercent = population > 0 ? Math.round((responded / population) * 100) : 0;
     return {
       name: service.name,
       population,
@@ -88,6 +89,7 @@ export const getSurveySummary = (
       responded,
       gap,
       percent,
+      fulfillmentPercent,
     };
   });
 

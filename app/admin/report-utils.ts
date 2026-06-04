@@ -515,7 +515,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
 ) => {
   const summary = getSurveySummary(records, availableServices, populationCounts);
   const rows = [...summary.serviceSummary].sort((left, right) => (
-    right.percent - left.percent
+    right.fulfillmentPercent - left.fulfillmentPercent
     || right.responded - left.responded
     || left.name.localeCompare(right.name)
   ));
@@ -555,7 +555,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
       const y = 422 + (index * 36);
       const barWidth = 198;
       const barX = 292;
-      const fillWidth = Math.min(barWidth, Math.max(0, (row.percent / 100) * barWidth));
+      const fillWidth = Math.min(barWidth, Math.max(0, (row.fulfillmentPercent / 100) * barWidth));
 
       doc.setFillColor(111, 191, 68);
       doc.circle(52, y + 7, 3, 'F');
@@ -571,7 +571,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
       }
       doc.setTextColor(15, 78, 184);
       doc.setFontSize(8.5);
-      doc.text(`${row.percent}%`, 548, y + 8, { align: 'right' });
+      doc.text(`${row.fulfillmentPercent}%`, 548, y + 8, { align: 'right' });
       doc.setDrawColor(226, 232, 240);
       doc.line(48, y + 27, 548, y + 27);
     });

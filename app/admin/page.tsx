@@ -133,7 +133,7 @@ export default function AdminPage() {
     : 0;
   const serviceRanking = useMemo(() => (
     [...summary.serviceSummary].sort((left, right) => (
-      right.percent - left.percent
+      right.fulfillmentPercent - left.fulfillmentPercent
       || right.responded - left.responded
       || left.name.localeCompare(right.name)
     ))
@@ -304,9 +304,9 @@ export default function AdminPage() {
               <div className="ranking-bar-row" key={`rank-${row.name}`}>
                 <span>{row.name}</span>
                 <div className="ranking-bar-track">
-                  <div className="ranking-bar-fill" style={{ width: `${Math.min(100, row.percent)}%` }} />
+                  <div className="ranking-bar-fill" style={{ width: `${Math.min(100, row.fulfillmentPercent)}%` }} />
                 </div>
-                <strong>{row.percent}%</strong>
+                <strong>{row.fulfillmentPercent}%</strong>
               </div>
             ))}
           </div>
