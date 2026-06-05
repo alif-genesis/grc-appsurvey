@@ -6,10 +6,18 @@ import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../
 import { getEmailSenderForCampaign } from '../email-senders';
 
 type EmailRecipient = {
+  id?: string;
   name: string;
   email: string;
   serviceType?: string;
   serviceTypes?: string[];
+};
+
+type BlastPersonRow = {
+  id: string;
+  name: string;
+  email: string;
+  service_types: unknown;
 };
 
 const MAX_RECIPIENTS_PER_REQUEST = 5;
@@ -88,6 +96,9 @@ const getRecipientServices = (person: EmailRecipient) => (
 );
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+const normalizeServices = (value: unknown) => (
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
+);
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -137,7 +148,7 @@ const buildEmail = (
       '',
       surveyLink,
       '',
-      'Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 04 Juni s.d. 30 Juni 2026',
+      'Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 05 Juni s.d. 30 Juni 2026',
       '',
       'Partisipasi Bapak/Ibu/Saudara/i sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Infrastruktur Digital',
       '',
@@ -148,7 +159,7 @@ const buildEmail = (
       <p>Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada Pegawai, Sekretariat Direktorat Jenderal Infrastruktur Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.</p>
       <p>Kami mohon kesediaan Bapak/Ibu/Saudara/i untuk mengisi survei pada tautan/link survei berikut :</p>
       <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
-      <p>Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 04 Juni s.d. 30 Juni 2026</p>
+      <p>Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 05 Juni s.d. 30 Juni 2026</p>
       <p>Partisipasi Bapak/Ibu/Saudara/i sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Infrastruktur Digital</p>
       <p>Terima kasih.</p>
       <img src="${safeOpenPixel}" width="1" height="1" alt="" style="display:none" />
@@ -349,6 +360,44 @@ export async function POST(request: NextRequest) {
     const { from, user, pass, host, port, encryption } = sender;
     const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();
+    const requestedIds = recipients.map((person) => person.id).filter((id): id is string => Boolean(id));
+    const requestedEmails = Array.from(new Set(recipients.map((person) => normalizeEmail(person.email))));
+    const peopleQuery = requestedIds.length > 0
+      ? supabase
+        .from('blast_people')
+        .select('id, name, email, service_types')
+        .in('id', requestedIds)
+      : supabase
+        .from('blast_people')
+        .select('id, name, email, service_types')
+        .in('email', requestedEmails);
+    const { data: allowedPeopleData, error: allowedPeopleError } = await scopeFilter(peopleQuery, true, request);
+    if (allowedPeopleError) throw allowedPeopleError;
+
+    const allowedPeople = (allowedPeopleData ?? []) as BlastPersonRow[];
+    const allowedById = new Map(allowedPeople.map((person) => [person.id, person]));
+    const allowedByEmail = new Map(allowedPeople.map((person) => [normalizeEmail(person.email), person]));
+    const verifiedRecipients = recipients.map((person) => {
+      const normalizedEmail = normalizeEmail(person.email);
+      const allowedPerson = person.id ? allowedById.get(person.id) : allowedByEmail.get(normalizedEmail);
+      if (!allowedPerson || normalizeEmail(allowedPerson.email) !== normalizedEmail) {
+        throw new Error(`Penerima ${person.email} tidak ada di daftar responden survey aktif.`);
+      }
+
+      const allowedServices = normalizeServices(allowedPerson.service_types);
+      const requestedServices = getRecipientServices(person);
+      const invalidServices = requestedServices.filter((service) => !allowedServices.includes(service));
+      if (invalidServices.length > 0) {
+        throw new Error(`Layanan penerima ${person.email} tidak sesuai daftar responden aktif: ${invalidServices.join(', ')}.`);
+      }
+
+      return {
+        ...person,
+        name: allowedPerson.name,
+        email: allowedPerson.email,
+        serviceTypes: requestedServices,
+      };
+    });
     const publicBaseUrl = getPublicBaseUrl(request);
     const transporter = nodemailer.createTransport(host ? {
       host,
@@ -373,7 +422,7 @@ export async function POST(request: NextRequest) {
       sentAt?: string;
     }[][] = [];
 
-    for (const [index, person] of recipients.entries()) {
+    for (const [index, person] of verifiedRecipients.entries()) {
       if (index > 0) {
         await sleep(SEND_DELAY_MS);
       }

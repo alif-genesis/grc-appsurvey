@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_SURVEY_CAMPAIGN_ID } from '../../services';
 import { ADMIN_SURVEY_COOKIE, formatServerError, getSupabase, getSurveyScope } from '../../supabase-server';
+import { getPublicEmailSenderForCampaign } from '../blast/email-senders';
 
 type CampaignRow = {
   id: string;
@@ -77,14 +78,20 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const campaign = data as CampaignRow | null;
+    const campaignText = `${campaign?.name || ''} ${campaign?.description || ''}`;
+    const campaignSender = getPublicEmailSenderForCampaign(campaignId, campaignText);
     return NextResponse.json({
       campaign: campaign ? {
         id: campaign.id,
         name: campaign.name,
         description: campaign.description ?? '',
-        senderLabel: blastContext?.sender_label ?? '',
-        senderEmail: blastContext?.sender_email ?? '',
-      } : defaultCampaign,
+        senderLabel: blastContext?.sender_label ?? campaignSender.label,
+        senderEmail: blastContext?.sender_email ?? campaignSender.email,
+      } : {
+        ...defaultCampaign,
+        senderLabel: blastContext?.sender_label ?? campaignSender.label,
+        senderEmail: blastContext?.sender_email ?? campaignSender.email,
+      },
     });
   } catch (error) {
     return NextResponse.json({

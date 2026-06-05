@@ -1978,6 +1978,14 @@ select {
   text-decoration: none;
 }
 
+.history-link-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 120px;
+}
+
 .table-plain-text {
   display: block;
   color: #0f172a;

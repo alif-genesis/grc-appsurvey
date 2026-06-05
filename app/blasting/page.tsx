@@ -18,6 +18,7 @@ type BlastPersonDraft = Pick<BlastPerson, 'name' | 'email' | 'serviceTypes'>;
 
 type BlastHistory = {
   id: string;
+  blastGroupId?: string | null;
   personName: string;
   email: string;
   senderId?: string;
@@ -100,6 +101,19 @@ const downloadBlobFile = (blob: Blob, filename: string) => {
   window.setTimeout(() => {
     window.URL.revokeObjectURL(url);
   }, 0);
+};
+
+const getManualBlastLink = (row: BlastHistory) => {
+  if (typeof window === 'undefined') return row.surveyLink;
+
+  const trackUrl = new URL(withBasePath('/api/track/click'), window.location.origin);
+  if (row.blastGroupId) {
+    trackUrl.searchParams.set('blastGroupId', row.blastGroupId);
+  } else {
+    trackUrl.searchParams.set('blastId', row.id);
+  }
+  trackUrl.searchParams.set('target', row.surveyLink);
+  return trackUrl.toString();
 };
 
 const getMonitoringStatus = (row: BlastHistory) => {
@@ -396,7 +410,9 @@ export default function BlastingPage() {
       window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
 
       setPeople(loadedPeople);
-      setSelectedPersonIds(loadedPeople.filter((person) => person.serviceTypes.length > 0).map((person) => person.id));
+      setSelectedPersonIds((current) => current.filter((id) => (
+        loadedPeople.some((person) => person.id === id && person.serviceTypes.length > 0)
+      )));
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil daftar orang.');
     } finally {
@@ -859,6 +875,19 @@ export default function BlastingPage() {
     }
   };
 
+  const copyManualBlastLink = async (row: BlastHistory) => {
+    const link = getManualBlastLink(row);
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API tidak tersedia.');
+      }
+      await navigator.clipboard.writeText(link);
+      setBlastNotice(`Link japri untuk ${row.personName} disalin.`);
+    } catch {
+      window.prompt('Salin link ini:', link);
+    }
+  };
+
   const requestResetBlast = () => {
     if (isResettingBlast || isEmailBlasting) return;
     setIsResetConfirmOpen(true);
@@ -1294,7 +1323,14 @@ export default function BlastingPage() {
                       ) : '-'}
                     </td>
                     <td>{row.serviceType}</td>
-                    <td><a className="history-link" href={row.surveyLink}>Buka link</a></td>
+                    <td>
+                      <div className="history-link-actions">
+                        <a className="history-link" href={getManualBlastLink(row)}>Buka link</a>
+                        <button type="button" className="text-button" onClick={() => copyManualBlastLink(row)}>
+                          Salin link
+                        </button>
+                      </div>
+                    </td>
                     <td>{formatDateTime(row.sentAt)}</td>
                     <td>{formatDateTime(row.openedAt)}</td>
                     <td>{formatDateTime(row.clickedAt)}</td>
