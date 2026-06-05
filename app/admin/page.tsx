@@ -101,14 +101,7 @@ export default function AdminPage() {
     });
     return acc;
   }, {}), [people]);
-  const blastTargetCounts = useMemo(() => history.reduce<Record<string, number>>((acc, row) => {
-    if (!row.serviceType) return acc;
-    acc[row.serviceType] = (acc[row.serviceType] ?? 0) + 1;
-    return acc;
-  }, {}), [history]);
-  const surveyTargetCounts = useMemo(() => (
-    Object.keys(blastTargetCounts).length > 0 ? blastTargetCounts : servicePopulationCounts
-  ), [blastTargetCounts, servicePopulationCounts]);
+  const surveyTargetCounts = servicePopulationCounts;
   const activeServiceRecords = useMemo(
     () => records.filter((record) => availableServices.includes(record.profile.serviceType)),
     [availableServices, records],
@@ -252,13 +245,13 @@ export default function AdminPage() {
           <h2>Progress Keseluruhan</h2>
           <div className="gauge-row">
             <div className="gauge-card compact-gauge-card">
-              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': summary.overallPercent } as any}>
+              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': summary.overallPopulationPercent } as any}>
                 <div className="gauge-center compact-gauge-center"></div>
               </div>
               <div className="gauge-label">
                 <small>Target</small>
-                <span>{summary.overallPercent}%</span>
-                <p>{summary.overallResponded}/{summary.overallTarget}</p>
+                <span>{summary.overallPopulationPercent}%</span>
+                <p>{summary.overallResponded}/{summary.overallPopulation}</p>
               </div>
             </div>
             <div className="gauge-card compact-gauge-card">

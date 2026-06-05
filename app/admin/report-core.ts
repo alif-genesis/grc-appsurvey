@@ -94,16 +94,20 @@ export const getSurveySummary = (
   });
 
   const overallTarget = serviceSummary.reduce((sum, row) => sum + row.target, 0);
+  const overallPopulation = serviceSummary.reduce((sum, row) => sum + row.population, 0);
   const overallResponded = serviceSummary.reduce((sum, row) => sum + row.responded, 0);
   const overallPercent = overallTarget > 0 ? Math.round((overallResponded / overallTarget) * 100) : 0;
+  const overallPopulationPercent = overallPopulation > 0 ? Math.round((overallResponded / overallPopulation) * 100) : 0;
 
   return {
     totalSurveys: records.length,
     uniqueRespondents: new Set(records.map((record) => `${record.profile.name}-${record.profile.directorate}-${record.profile.serviceType}`)).size,
     serviceSummary,
+    overallPopulation,
     overallTarget,
     overallResponded,
     overallPercent,
+    overallPopulationPercent,
   };
 };
 
