@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { serviceToSlug, withBasePath, withSurveyParam } from '../services';
+import { PUBLIC_SURVEY_URL, serviceToSlug, withBasePath, withSurveyParam } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
 type BlastPerson = {
@@ -103,16 +103,17 @@ const downloadBlobFile = (blob: Blob, filename: string) => {
   }, 0);
 };
 
-const getManualBlastLink = (row: BlastHistory) => {
-  if (typeof window === 'undefined') return row.surveyLink;
-
-  const trackUrl = new URL(withBasePath('/api/track/click'), window.location.origin);
+const getManualBlastLink = (row: BlastHistory, groupSize = 1) => {
+  const target = row.blastGroupId && groupSize > 1
+    ? `${PUBLIC_SURVEY_URL}/multi-survey`
+    : row.surveyLink;
+  const trackUrl = new URL(withBasePath('/api/track/click'), PUBLIC_SURVEY_URL);
   if (row.blastGroupId) {
     trackUrl.searchParams.set('blastGroupId', row.blastGroupId);
   } else {
     trackUrl.searchParams.set('blastId', row.id);
   }
-  trackUrl.searchParams.set('target', row.surveyLink);
+  trackUrl.searchParams.set('target', target);
   return trackUrl.toString();
 };
 
@@ -358,6 +359,19 @@ export default function BlastingPage() {
       new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
     ));
   }, [history, historySearch, historyServiceFilter, historyStatusFilter]);
+
+  const historyGroupSizes = useMemo(() => {
+    const sizes = new Map<string, number>();
+    history.forEach((row) => {
+      if (!row.blastGroupId) return;
+      sizes.set(row.blastGroupId, (sizes.get(row.blastGroupId) ?? 0) + 1);
+    });
+    return sizes;
+  }, [history]);
+
+  const getHistoryManualBlastLink = (row: BlastHistory) => (
+    getManualBlastLink(row, row.blastGroupId ? historyGroupSizes.get(row.blastGroupId) ?? 1 : 1)
+  );
 
   const filteredHistoryIds = useMemo(() => (
     filteredHistory.map((row) => row.id)
@@ -849,6 +863,7 @@ export default function BlastingPage() {
             senderEmail: row.senderEmail,
             serviceType: row.serviceType,
             surveyLink: row.surveyLink,
+            manualLink: getHistoryManualBlastLink(row),
             status: row.status,
             error: row.error,
             sentAt: row.sentAt,
@@ -876,7 +891,7 @@ export default function BlastingPage() {
   };
 
   const copyManualBlastLink = async (row: BlastHistory) => {
-    const link = getManualBlastLink(row);
+    const link = getHistoryManualBlastLink(row);
     try {
       if (!navigator.clipboard?.writeText) {
         throw new Error('Clipboard API tidak tersedia.');
@@ -1325,8 +1340,8 @@ export default function BlastingPage() {
                     <td>{row.serviceType}</td>
                     <td>
                       <div className="history-link-actions">
-                        <a className="history-link" href={getManualBlastLink(row)}>Buka link</a>
-                        <button type="button" className="text-button" onClick={() => copyManualBlastLink(row)}>
+                        <a className="history-link" href={getHistoryManualBlastLink(row)}>Buka link</a>
+                        <button type="button" className="history-link" onClick={() => copyManualBlastLink(row)}>
                           Salin link
                         </button>
                       </div>

@@ -1973,17 +1973,20 @@ select {
 }
 
 .history-link {
+  border: none;
   padding: 7px 10px;
   background: #eff6ff;
+  color: #0f4eb8;
+  cursor: pointer;
+  font: inherit;
   text-decoration: none;
 }
 
 .history-link-actions {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  min-width: 120px;
+  min-width: 210px;
 }
 
 .table-plain-text {

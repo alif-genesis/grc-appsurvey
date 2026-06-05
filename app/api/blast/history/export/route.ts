@@ -11,6 +11,7 @@ type BlastExportRecord = {
   senderEmail?: string | null;
   serviceType: string;
   surveyLink: string;
+  manualLink?: string | null;
   status: 'Sukses' | 'Gagal' | 'Pending';
   error?: string | null;
   sentAt?: string | null;
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
       senderEmail: row.senderEmail || '',
       layanan: row.serviceType,
       link: row.surveyLink,
+      linkJapri: row.manualLink || row.surveyLink,
       terkirim: formatDateTime(row.sentAt),
       emailDibuka: formatDateTime(row.openedAt),
       linkDibuka: formatDateTime(row.clickedAt),
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
       { header: 'Email Sender', width: 34, cell: (row: typeof rows[number]) => ({ type: String, value: row.senderEmail }) },
       { header: 'Layanan', width: 52, cell: (row: typeof rows[number]) => ({ type: String, value: row.layanan }) },
       { header: 'Link', width: 72, cell: (row: typeof rows[number]) => ({ type: String, value: row.link }) },
+      { header: 'Link Japri', width: 72, cell: (row: typeof rows[number]) => ({ type: String, value: row.linkJapri }) },
       { header: 'Terkirim', width: 22, cell: (row: typeof rows[number]) => ({ type: String, value: row.terkirim }) },
       { header: 'Email Dibuka', width: 22, cell: (row: typeof rows[number]) => ({ type: String, value: row.emailDibuka }) },
       { header: 'Link Dibuka', width: 22, cell: (row: typeof rows[number]) => ({ type: String, value: row.linkDibuka }) },
