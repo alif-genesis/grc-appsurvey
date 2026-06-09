@@ -51,7 +51,7 @@ type SurveyContext = {
 const getSurveyPeriodText = (context: SurveyContext) => {
   const normalizedContext = `${context.id} ${context.name} ${context.description}`.toLowerCase();
   return normalizedContext.includes('infrastruktur digital')
-    ? '04 Juni s.d. 30 Juni 2026'
+    ? '09 Juni 2026 s.d. 30 Juni 2026'
     : '02 Juni 2026 s.d. 30 Juni 2026';
 };
 

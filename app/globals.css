@@ -748,6 +748,13 @@ select {
   overflow-wrap: anywhere;
 }
 
+.compact-gauge-card .gauge-label p {
+  font-size: 1rem;
+  line-height: 1.1;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
 .admin-chart-grid {
   grid-template-columns: 2fr 1fr;
   gap: 20px;
