@@ -3,8 +3,8 @@ import { KOMDIGI_LOGO_URL } from './services';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Survei Kepuasan Layanan Kominfo',
-  description: 'Aplikasi survei kepuasan layanan dan persepsi anti korupsi',
+  title: 'Survei Kepuasan Layanan Komdigi',
+  description: 'Aplikasi Survei Kepuasan Layanan dan Persepsi Anti Korupsi',
   icons: {
     icon: KOMDIGI_LOGO_URL,
     shortcut: KOMDIGI_LOGO_URL,
