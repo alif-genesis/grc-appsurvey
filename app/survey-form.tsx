@@ -60,6 +60,14 @@ const getSurveyPeriodText = (context: SurveyContext) => {
     : '02 Juni 2026 s.d. 30 Juni 2026';
 };
 
+const getSurveyDisplayName = (context: SurveyContext) => {
+  const normalizedSender = `${context.senderLabel || ''} ${context.senderEmail || ''}`.toLowerCase();
+  if (normalizedSender.includes('sekretariat djid') || normalizedSender.includes('tusesdjid@mail.komdigi.go.id')) {
+    return 'Direktorat Jenderal Infrastruktur Digital';
+  }
+  return context.name || 'Memuat survey...';
+};
+
 const getCookieValue = (name: string) => {
   if (typeof document === 'undefined') return '';
   const value = document.cookie
@@ -369,7 +377,7 @@ export default function HomePage() {
         <div className="brand-row">
           <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} decoding="async" />
           <div>
-            <p className="agency">{surveyContext.name || 'Memuat survey...'}</p>
+            <p className="agency">{getSurveyDisplayName(surveyContext)}</p>
           </div>
         </div>
         <div className="title-block">

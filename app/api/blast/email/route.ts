@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
-import { serviceToSlug } from '../../../services';
+import { serviceToSlug, withSurveyParam } from '../../../services';
 import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
 import { getEmailSenderForCampaign } from '../email-senders';
 
@@ -127,7 +127,10 @@ const buildEmail = (
   senderFrom: string,
 ) => {
   const services = getRecipientServices(person);
-  const surveyLink = services.length > 1 ? getMultiSurveyLink(baseUrl) : getSurveyLink(baseUrl, services[0]);
+  const surveyLink = withSurveyParam(
+    services.length > 1 ? getMultiSurveyLink(baseUrl) : getSurveyLink(baseUrl, services[0]),
+    campaignId,
+  );
   const clickLink = getTrackingUrl(baseUrl, '/api/track/click', blastGroupId, surveyLink);
   const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');

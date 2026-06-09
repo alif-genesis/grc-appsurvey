@@ -46,13 +46,28 @@ type SurveyContext = {
   id: string;
   name: string;
   description: string;
+  senderLabel?: string;
+  senderEmail?: string;
 };
 
 const getSurveyPeriodText = (context: SurveyContext) => {
+  const normalizedSender = `${context.senderLabel || ''} ${context.senderEmail || ''}`.toLowerCase();
+  if (normalizedSender.includes('sekretariat djid') || normalizedSender.includes('tusesdjid@mail.komdigi.go.id')) {
+    return '09 Juni 2026 s.d. 30 Juni 2026';
+  }
+
   const normalizedContext = `${context.id} ${context.name} ${context.description}`.toLowerCase();
   return normalizedContext.includes('infrastruktur digital')
     ? '09 Juni 2026 s.d. 30 Juni 2026'
     : '02 Juni 2026 s.d. 30 Juni 2026';
+};
+
+const getSurveyDisplayName = (context: SurveyContext) => {
+  const normalizedSender = `${context.senderLabel || ''} ${context.senderEmail || ''}`.toLowerCase();
+  if (normalizedSender.includes('sekretariat djid') || normalizedSender.includes('tusesdjid@mail.komdigi.go.id')) {
+    return 'Direktorat Jenderal Infrastruktur Digital';
+  }
+  return context.name || 'Memuat survey...';
 };
 
 const getDraftKey = (blastGroupId: string) => `${MULTI_SURVEY_DRAFT_PREFIX}:${blastGroupId}`;
@@ -307,7 +322,7 @@ export default function MultiSurveyPage() {
         <div className="brand-row">
           <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} decoding="async" />
           <div>
-            <p className="agency">{surveyContext.name || 'Memuat survey...'}</p>
+            <p className="agency">{getSurveyDisplayName(surveyContext)}</p>
           </div>
         </div>
         <div className="title-block">

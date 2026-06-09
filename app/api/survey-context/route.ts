@@ -21,6 +21,33 @@ const defaultCampaign = {
   description: 'Survey Kepuasan Layanan Biro Hubungan Masyarakat',
 };
 
+const SEKRETARIAT_DJID_EMAIL = 'tusesdjid@mail.komdigi.go.id';
+const INFRASTRUKTUR_DIGITAL_NAME = 'Direktorat Jenderal Infrastruktur Digital';
+
+const normalizeContextValue = (value?: string | null) => (value || '').trim().toLowerCase();
+
+const isSekretariatDjidContext = (senderLabel?: string | null, senderEmail?: string | null) => {
+  const normalized = `${normalizeContextValue(senderLabel)} ${normalizeContextValue(senderEmail)}`;
+  return normalized.includes('sekretariat djid') || normalized.includes(SEKRETARIAT_DJID_EMAIL);
+};
+
+const applySenderCampaignDisplay = <T extends CampaignRow | typeof defaultCampaign>(
+  campaign: T,
+  blastContext: BlastContextRow | null,
+  campaignSender: { label: string; email: string },
+) => {
+  const senderLabel = blastContext?.sender_label ?? campaignSender.label;
+  const senderEmail = blastContext?.sender_email ?? campaignSender.email;
+  return {
+    ...campaign,
+    name: isSekretariatDjidContext(senderLabel, senderEmail)
+      ? INFRASTRUKTUR_DIGITAL_NAME
+      : campaign.name,
+    senderLabel,
+    senderEmail,
+  };
+};
+
 const getBlastIdentifiers = (request: NextRequest) => ({
   blastId: request.nextUrl.searchParams.get('blastId')?.trim() || request.cookies.get('genesis_blast_id')?.value,
   blastGroupId: request.nextUrl.searchParams.get('blastGroupId')?.trim() || request.cookies.get('genesis_blast_group_id')?.value,
@@ -80,17 +107,14 @@ export async function GET(request: NextRequest) {
     const campaign = data as CampaignRow | null;
     const campaignText = `${campaign?.name || ''} ${campaign?.description || ''}`;
     const campaignSender = getPublicEmailSenderForCampaign(campaignId, campaignText);
+    const displayCampaign = applySenderCampaignDisplay(campaign ?? defaultCampaign, blastContext, campaignSender);
     return NextResponse.json({
-      campaign: campaign ? {
-        id: campaign.id,
-        name: campaign.name,
-        description: campaign.description ?? '',
-        senderLabel: blastContext?.sender_label ?? campaignSender.label,
-        senderEmail: blastContext?.sender_email ?? campaignSender.email,
-      } : {
-        ...defaultCampaign,
-        senderLabel: blastContext?.sender_label ?? campaignSender.label,
-        senderEmail: blastContext?.sender_email ?? campaignSender.email,
+      campaign: {
+        id: displayCampaign.id,
+        name: displayCampaign.name,
+        description: displayCampaign.description ?? '',
+        senderLabel: displayCampaign.senderLabel,
+        senderEmail: displayCampaign.senderEmail,
       },
     });
   } catch (error) {
