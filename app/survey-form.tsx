@@ -132,6 +132,15 @@ const withBlastParams = (path: string, blastContext: BlastContext) => {
   return query ? `${path}${path.includes('?') ? '&' : '?'}${query}` : path;
 };
 
+const withSurveyContextParams = (path: string, campaignId: string, blastContext: BlastContext) => {
+  const params = new URLSearchParams();
+  if (campaignId) params.set(SURVEY_QUERY_PARAM, campaignId);
+  if (blastContext.blastId) params.set('blastId', blastContext.blastId);
+  if (blastContext.blastGroupId) params.set('blastGroupId', blastContext.blastGroupId);
+  const query = params.toString();
+  return query ? `${path}${path.includes('?') ? '&' : '?'}${query}` : path;
+};
+
 export default function HomePage() {
   const [profile, setProfile] = useState({
     name: '',
@@ -195,9 +204,7 @@ export default function HomePage() {
     const resolveService = async () => {
       try {
         const campaignId = getCampaignIdFromUrl();
-        const servicesPath = campaignId
-          ? `/api/services/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
-          : withBlastParams('/api/services/', blastContext);
+        const servicesPath = withSurveyContextParams('/api/services/', campaignId, blastContext);
         const response = await fetch(withBasePath(servicesPath), { cache: 'no-store' });
         const payload = await response.json() as { services?: Array<{ name: string }> };
         const availableServices = payload.services?.map((service) => service.name).filter(Boolean) ?? serviceTypes;
@@ -211,9 +218,7 @@ export default function HomePage() {
     const loadWorkUnits = async () => {
       try {
         const campaignId = getCampaignIdFromUrl();
-        const workUnitsPath = campaignId
-          ? `/api/work-units/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
-          : withBlastParams('/api/work-units/', blastContext);
+        const workUnitsPath = withSurveyContextParams('/api/work-units/', campaignId, blastContext);
         const response = await fetch(withBasePath(workUnitsPath), { cache: 'no-store' });
         const payload = await response.json() as { workUnits?: Array<{ name: string }> };
         const names = payload.workUnits?.map((workUnit) => workUnit.name).filter(Boolean) ?? defaultWorkUnits;
@@ -226,9 +231,7 @@ export default function HomePage() {
     const loadSurveyContext = async () => {
       try {
         const campaignId = getCampaignIdFromUrl();
-        const contextPath = campaignId
-          ? `/api/survey-context/?${SURVEY_QUERY_PARAM}=${encodeURIComponent(campaignId)}`
-          : withBlastParams('/api/survey-context/', blastContext);
+        const contextPath = withSurveyContextParams('/api/survey-context/', campaignId, blastContext);
         const response = await fetch(withBasePath(contextPath), { cache: 'no-store' });
         const payload = await response.json() as { campaign?: SurveyContext };
         if (payload.campaign?.name) setSurveyContext(payload.campaign);

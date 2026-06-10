@@ -31,16 +31,14 @@ const fallbackWorkUnits = () => defaultWorkUnits.map((name, index) => ({
 }));
 
 const getWorkUnitCampaignId = async (request: NextRequest) => {
-  const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
-  if (requestedScope) return requestedScope;
-
   const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
   const adminScope = request.cookies.get(ADMIN_SURVEY_COOKIE)?.value;
   if (adminOnly && adminScope) return adminScope;
 
   const blastId = request.nextUrl.searchParams.get('blastId')?.trim() || request.cookies.get('genesis_blast_id')?.value;
   const blastGroupId = request.nextUrl.searchParams.get('blastGroupId')?.trim() || request.cookies.get('genesis_blast_group_id')?.value;
-  if (!blastId && !blastGroupId) return adminScope || getSurveyScope(request);
+  const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
+  if (!blastId && !blastGroupId) return requestedScope || adminScope || getSurveyScope(request);
 
   const supabase = getSupabase();
   const query = supabase
@@ -52,7 +50,7 @@ const getWorkUnitCampaignId = async (request: NextRequest) => {
     : await query.eq('blast_group_id', blastGroupId);
 
   if (error) throw error;
-  return data?.[0]?.campaign_id || adminScope || getSurveyScope(request);
+  return data?.[0]?.campaign_id || requestedScope || adminScope || getSurveyScope(request);
 };
 
 export async function GET(request: NextRequest) {

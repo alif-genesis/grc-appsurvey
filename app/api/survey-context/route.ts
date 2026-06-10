@@ -82,12 +82,14 @@ const getBlastContext = async (request: NextRequest) => {
 };
 
 const getContextCampaignId = async (request: NextRequest, blastContext: BlastContextRow | null) => {
-  const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
-  if (requestedScope) return requestedScope;
-
   const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
   const adminScope = request.cookies.get(ADMIN_SURVEY_COOKIE)?.value;
   if (adminOnly && adminScope) return adminScope;
+
+  if (blastContext?.campaign_id) return blastContext.campaign_id;
+
+  const requestedScope = request.nextUrl.searchParams.get('survey')?.trim();
+  if (requestedScope) return requestedScope;
 
   return blastContext?.campaign_id || adminScope || getSurveyScope(request);
 };

@@ -3,7 +3,7 @@ import { resolveMx } from 'dns/promises';
 import nodemailer from 'nodemailer';
 import { serviceToSlug, withSurveyParam } from '../../../services';
 import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
-import { getEmailSenderForCampaign } from '../email-senders';
+import { getEmailSender } from '../email-senders';
 
 type EmailRecipient = {
   id?: string;
@@ -359,7 +359,7 @@ export async function POST(request: NextRequest) {
     }
 
     const activeCampaignId = getSurveyScope(request);
-    const sender = getEmailSenderForCampaign(activeCampaignId, await getCampaignText(activeCampaignId));
+    const sender = getEmailSender(body.senderId);
     const { from, user, pass, host, port, encryption } = sender;
     const secure = encryption === 'ssl' || encryption === 'ssl/tls' || port === 465;
     const supabase = getSupabase();
