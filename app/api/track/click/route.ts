@@ -1,23 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PUBLIC_SURVEY_URL } from '../../../services';
 import { getSupabase } from '../../../supabase-server';
-
-const isLocalHost = (hostname: string) => (
-  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0'
-);
-
-const getRequestOrigin = (request: NextRequest) => {
-  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  const forwardedProto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '');
-  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`;
-  return new URL(request.url).origin;
-};
+import { getPublicRequestOrigin, isLocalHost } from '../../../request-url';
 
 const normalizePublicTarget = (request: NextRequest, target: string) => {
   const targetUrl = new URL(target);
   if (!isLocalHost(targetUrl.hostname)) return targetUrl.toString();
 
-  const publicOrigin = getRequestOrigin(request);
+  const publicOrigin = getPublicRequestOrigin(request);
   return new URL(`${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`, publicOrigin).toString();
 };
 
@@ -29,7 +19,7 @@ const getSafeRedirectUrl = (request: NextRequest, target?: string | null) => {
     const targetUrl = new URL(normalizedTarget);
     const appUrl = new URL(request.url);
     const publicSurveyUrl = new URL(PUBLIC_SURVEY_URL);
-    const requestOrigin = getRequestOrigin(request);
+    const requestOrigin = getPublicRequestOrigin(request);
     return [appUrl.origin, publicSurveyUrl.origin, requestOrigin].includes(targetUrl.origin)
       ? targetUrl.toString()
       : requestOrigin;
@@ -73,7 +63,7 @@ export async function GET(request: NextRequest) {
   const rows = data ?? [];
   const singleRow = rows.length === 1 ? rows[0] : null;
   const redirectTarget = blastGroupId && rows.length > 1
-    ? new URL('/multi-survey', getRequestOrigin(request))
+    ? new URL('/multi-survey', getPublicRequestOrigin(request))
     : new URL(getSafeRedirectUrl(request, singleRow?.survey_link || target));
   if (blastGroupId && rows.length > 1) {
     redirectTarget.hash = `blastGroupId=${encodeURIComponent(blastGroupId)}`;
