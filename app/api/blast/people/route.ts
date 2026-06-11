@@ -72,6 +72,10 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    if (request.nextUrl.searchParams.get('sync') === '0') {
+      return NextResponse.json({ people: (data as BlastPersonRow[]).map(mapPersonRow) });
+    }
+
     const allowedServices = await getAllowedServices(request);
     const syncedRows = await syncPersonServices(supabase, data as BlastPersonRow[], allowedServices);
     return NextResponse.json({ people: syncedRows.map(mapPersonRow) });

@@ -29,6 +29,31 @@ export const getRequiredEnv = (key: string) => {
   return value;
 };
 
+const SUPABASE_FETCH_TIMEOUT_MS = 10000;
+
+const fetchWithTimeout: typeof fetch = async (input, init = {}) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SUPABASE_FETCH_TIMEOUT_MS);
+  const upstreamSignal = init.signal;
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+
+  if (upstreamSignal?.aborted) {
+    controller.abort(upstreamSignal.reason);
+  } else {
+    upstreamSignal?.addEventListener('abort', abortFromUpstream, { once: true });
+  }
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+    upstreamSignal?.removeEventListener('abort', abortFromUpstream);
+  }
+};
+
 export const getSupabase = () => createClient(
   getRequiredEnv('NEXT_PUBLIC_SUPABASE_URL'),
   getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY'),
@@ -36,6 +61,9 @@ export const getSupabase = () => createClient(
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    global: {
+      fetch: fetchWithTimeout,
     },
   },
 );

@@ -11,7 +11,7 @@ export default function HomePage() {
             alt="PT Genetika Solusi Bisnis"
             width={280}
             height={100}
-            fetchPriority="high"
+            loading="lazy"
             decoding="async"
           />
         </nav>

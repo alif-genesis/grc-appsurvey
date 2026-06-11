@@ -16,6 +16,24 @@ import {
 } from '../admin/report-core';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
+const MONITORING_FETCH_TIMEOUT_MS = 8000;
+
+const fetchJson = async <T,>(path: string): Promise<T> => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), MONITORING_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(withBasePath(path), {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const payload = await response.json() as T & { error?: string };
+    if (!response.ok) throw new Error(payload.error || 'Gagal mengambil data.');
+    return payload;
+  } finally {
+    window.clearTimeout(timer);
+  }
+};
+
 const getQualityClass = (score: number) => {
   if (score >= 88.31) return 'quality-a';
   if (score >= 76.61) return 'quality-b';
@@ -39,10 +57,7 @@ export default function MonitoringPage() {
       if (localRecords.length > 0) setRecords(localRecords);
 
       try {
-        const response = await fetch(withBasePath('/api/surveys/'), { cache: 'no-store' });
-        const payload = await response.json() as { records?: SurveyRecord[]; error?: string };
-
-        if (!response.ok) throw new Error(payload.error || 'Gagal mengambil data survey dari server.');
+        const payload = await fetchJson<{ records?: SurveyRecord[] }>('/api/surveys/');
 
         setRecords(payload.records ?? []);
         setLoadMessage('Data diambil dari Supabase.');
@@ -58,8 +73,7 @@ export default function MonitoringPage() {
 
     const loadServices = async () => {
       try {
-        const response = await fetch(withBasePath('/api/services/?admin=1'), { cache: 'no-store' });
-        const payload = await response.json() as { services?: Array<{ name: string }> };
+        const payload = await fetchJson<{ services?: Array<{ name: string }> }>('/api/services/?admin=1');
         const names = payload.services?.map((service) => service.name).filter(Boolean);
         if (names) {
           setAvailableServices(names);

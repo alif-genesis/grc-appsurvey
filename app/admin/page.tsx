@@ -23,12 +23,29 @@ type BlastHistory = {
   submittedAt?: string | null;
 };
 
+const ADMIN_FETCH_TIMEOUT_MS = 8000;
 const normalizeKey = (value: string) => value.trim().toLowerCase();
 const getRespondentKey = (record: SurveyRecord) => (
   record.blastGroupId
   || `${normalizeKey(record.profile.name)}-${normalizeKey(record.profile.directorate)}`
 );
 const clampPercent = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+const fetchJson = async <T,>(path: string, init?: RequestInit): Promise<T> => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), ADMIN_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(withBasePath(path), {
+      cache: 'no-store',
+      ...init,
+      signal: controller.signal,
+    });
+    const payload = await response.json() as T & { error?: string };
+    if (!response.ok) throw new Error(payload.error || 'Gagal mengambil data.');
+    return payload;
+  } finally {
+    window.clearTimeout(timer);
+  }
+};
 
 const ProgressGauge = ({ value }: { value: number }) => {
   const pct = clampPercent(value);
@@ -67,12 +84,7 @@ export default function AdminPage() {
       if (localRecords.length > 0) setRecords(localRecords);
 
       try {
-        const response = await fetch(withBasePath('/api/surveys/'), { cache: 'no-store' });
-        const payload = await response.json() as { records?: SurveyRecord[]; error?: string };
-
-        if (!response.ok) {
-          throw new Error(payload.error || 'Gagal mengambil data survey dari server.');
-        }
+        const payload = await fetchJson<{ records?: SurveyRecord[] }>('/api/surveys/?lite=1');
 
         setRecords(payload.records ?? []);
         setLoadMessage('Data diambil dari Supabase.');
@@ -88,14 +100,12 @@ export default function AdminPage() {
 
     const loadTargets = async () => {
       try {
-        const [peopleResponse, historyResponse] = await Promise.all([
-          fetch(withBasePath('/api/blast/people'), { cache: 'no-store' }),
-          fetch(withBasePath('/api/blast/history'), { cache: 'no-store' }),
+        const [peoplePayload, historyPayload] = await Promise.all([
+          fetchJson<{ people?: BlastPerson[] }>('/api/blast/people?sync=0'),
+          fetchJson<{ records?: BlastHistory[] }>('/api/blast/history?summary=1'),
         ]);
-        const peoplePayload = await peopleResponse.json() as { people?: BlastPerson[] };
-        const historyPayload = await historyResponse.json() as { records?: BlastHistory[] };
-        if (peopleResponse.ok) setPeople(peoplePayload.people ?? []);
-        if (historyResponse.ok) setHistory(historyPayload.records ?? []);
+        setPeople(peoplePayload.people ?? []);
+        setHistory(historyPayload.records ?? []);
       } catch {
         setPeople([]);
         setHistory([]);
@@ -106,8 +116,7 @@ export default function AdminPage() {
 
     const loadServices = async () => {
       try {
-        const response = await fetch(withBasePath('/api/services/?admin=1'), { cache: 'no-store' });
-        const payload = await response.json() as { services?: Array<{ name: string }> };
+        const payload = await fetchJson<{ services?: Array<{ name: string }> }>('/api/services/?admin=1');
         const names = payload.services?.map((service) => service.name).filter(Boolean);
         if (names) setAvailableServices(names);
       } catch {
@@ -194,12 +203,16 @@ export default function AdminPage() {
 
   const downloadSummaryExcel = async () => {
     const { downloadAdminSummaryExcel } = await import('./report-utils');
-    await downloadAdminSummaryExcel(activeServiceRecords, availableServices, surveyTargetCounts);
+    const payload = await fetchJson<{ records?: SurveyRecord[] }>('/api/surveys/');
+    const fullRecords = (payload.records ?? []).filter((record) => availableServices.includes(record.profile.serviceType));
+    await downloadAdminSummaryExcel(fullRecords, availableServices, surveyTargetCounts);
   };
 
   const downloadSummaryPDF = async () => {
     const { downloadAdminSummaryPDF } = await import('./report-utils');
-    await downloadAdminSummaryPDF(activeServiceRecords, availableServices, surveyTargetCounts);
+    const payload = await fetchJson<{ records?: SurveyRecord[] }>('/api/surveys/');
+    const fullRecords = (payload.records ?? []).filter((record) => availableServices.includes(record.profile.serviceType));
+    await downloadAdminSummaryPDF(fullRecords, availableServices, surveyTargetCounts);
   };
 
   const downloadFulfillmentRankingPDF = async () => {

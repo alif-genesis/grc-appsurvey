@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://survey.genetikasolusibisnis.co.id/sitemap.xml

@@ -10,6 +10,7 @@ export default function SubmittedPage() {
           alt="Logo Komdigi"
           width={180}
           height={80}
+          loading="lazy"
           decoding="async"
         />
         <h1>Survey Sudah Disubmit</h1>

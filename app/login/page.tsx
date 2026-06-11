@@ -44,6 +44,7 @@ function LoginForm() {
           alt="Genesis"
           width={280}
           height={100}
+          loading="lazy"
           decoding="async"
         />
         <div>

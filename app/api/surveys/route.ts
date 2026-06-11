@@ -88,16 +88,22 @@ const isActiveCampaign = async (campaignId: string) => {
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
+    const lite = request.nextUrl.searchParams.get('lite') === '1';
     const query = supabase
       .from('survey_records')
-      .select('id, created_at, profile, responses, comments, blast_id, blast_group_id')
+      .select(lite
+        ? 'id, created_at, profile, comments, blast_id, blast_group_id'
+        : 'id, created_at, profile, responses, comments, blast_id, blast_group_id')
       .order('created_at', { ascending: false });
     const { data, error } = await scopeFilter(query, true, request);
 
     if (error) throw error;
 
     return NextResponse.json({
-      records: (data as SurveyRow[]).map(mapRowToRecord),
+      records: (data as SurveyRow[]).map((row) => mapRowToRecord({
+        ...row,
+        responses: row.responses ?? {},
+      })),
     });
   } catch (error) {
     return NextResponse.json(

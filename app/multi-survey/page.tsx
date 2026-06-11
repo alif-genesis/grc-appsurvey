@@ -322,7 +322,7 @@ export default function MultiSurveyPage() {
     <main className="page-shell">
       <div className="survey-header">
         <div className="brand-row">
-          <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} decoding="async" />
+          <img className="brand-image" src={KOMDIGI_LOGO_URL} alt="Logo Komdigi" width={180} height={80} loading="lazy" decoding="async" />
           <div>
             <p className="agency">{getSurveyDisplayName(surveyContext)}</p>
           </div>

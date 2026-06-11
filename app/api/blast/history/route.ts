@@ -44,6 +44,7 @@ const mapBlastRow = (row: BlastRow) => ({
 
 const HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, sender_id, sender_label, sender_email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
 const LEGACY_HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
+const SUMMARY_HISTORY_SELECT = 'id, blast_group_id, created_at, person_name, email, service_type, submitted_at';
 
 const stripSenderColumns = <T extends Record<string, unknown>>(record: T) => {
   const { sender_id, sender_label, sender_email, ...rest } = record;
@@ -53,14 +54,15 @@ const stripSenderColumns = <T extends Record<string, unknown>>(record: T) => {
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
+    const summaryOnly = request.nextUrl.searchParams.get('summary') === '1';
     const query = supabase
       .from('blast_records')
-      .select(HISTORY_SELECT)
+      .select(summaryOnly ? SUMMARY_HISTORY_SELECT : HISTORY_SELECT)
       .eq('channel', 'Email')
       .order('created_at', { ascending: false });
     let { data, error }: { data: unknown; error: unknown } = await scopeFilter(query, true, request);
 
-    if (error) {
+    if (error && !summaryOnly) {
       const legacyQuery = supabase
         .from('blast_records')
         .select(LEGACY_HISTORY_SELECT)
@@ -73,7 +75,22 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ records: (data as BlastRow[]).map(mapBlastRow) });
+    return NextResponse.json({
+      records: (data as BlastRow[]).map((row) => mapBlastRow({
+        ...row,
+        channel: row.channel ?? 'Email',
+        sender_id: row.sender_id ?? '',
+        sender_label: row.sender_label ?? '',
+        sender_email: row.sender_email ?? '',
+        survey_link: row.survey_link ?? '',
+        message: row.message ?? '',
+        send_status: row.send_status ?? 'Sukses',
+        error: row.error ?? '',
+        sent_at: row.sent_at ?? null,
+        opened_at: row.opened_at ?? null,
+        clicked_at: row.clicked_at ?? null,
+      })),
+    });
   } catch (error) {
     return NextResponse.json(
       { error: formatServerError(error, 'Gagal mengambil riwayat blast.') },
