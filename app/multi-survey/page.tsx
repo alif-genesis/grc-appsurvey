@@ -8,7 +8,7 @@ import {
   serviceOptions,
   serviceQuestions,
 } from '../survey-constants';
-import { KOMDIGI_LOGO_URL, withBasePath } from '../services';
+import { KOMDIGI_LOGO_URL, SURVEY_QUERY_PARAM, withBasePath } from '../services';
 import {
   createClientId,
   getServiceCommentPrompt,
@@ -92,6 +92,7 @@ const withBlastGroupParam = (path: string, blastGroupId: string) => {
 
 const getInitialBlastGroupId = () => {
   if (typeof window === 'undefined') return '';
+  const searchParams = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
   if (hashBlastGroupId) {
@@ -99,6 +100,7 @@ const getInitialBlastGroupId = () => {
     const nextHash = hashParams.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`);
   }
+  if (searchParams.get(SURVEY_QUERY_PARAM)?.trim()) return hashBlastGroupId;
   return hashBlastGroupId || getCookieValue('genesis_blast_group_id');
 };
 

@@ -84,6 +84,7 @@ const getInitialBlastContext = (): BlastContext => {
   const hashBlastId = hashParams.get('blastId')?.trim() || '';
   const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
   const paramsBlastId = params.get('blastId')?.trim() || '';
+  const hasSurveyParam = Boolean(params.get(SURVEY_QUERY_PARAM)?.trim());
   if (paramsBlastId || hashBlastId || hashBlastGroupId) {
     params.delete('blastId');
     hashParams.delete('blastId');
@@ -94,8 +95,8 @@ const getInitialBlastContext = (): BlastContext => {
   }
 
   return {
-    blastId: paramsBlastId || hashBlastId || getCookieValue('genesis_blast_id'),
-    blastGroupId: paramsBlastId || hashBlastId ? '' : hashBlastGroupId || getCookieValue('genesis_blast_group_id'),
+    blastId: paramsBlastId || hashBlastId || (hasSurveyParam ? '' : getCookieValue('genesis_blast_id')),
+    blastGroupId: paramsBlastId || hashBlastId ? '' : hashBlastGroupId || (hasSurveyParam ? '' : getCookieValue('genesis_blast_group_id')),
   };
 };
 

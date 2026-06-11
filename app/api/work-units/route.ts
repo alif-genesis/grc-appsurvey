@@ -12,6 +12,15 @@ type WorkUnitRow = {
   active: boolean | null;
 };
 
+type BlastWorkUnitContextRow = {
+  campaign_id?: string | null;
+  sender_label?: string | null;
+  sender_email?: string | null;
+};
+
+const SEKRETARIAT_DJID_EMAIL = 'tusesdjid@mail.komdigi.go.id';
+const INFRASTRUKTUR_DIGITAL_CAMPAIGN_ID = 'survei-infrastruktur-digital';
+
 const mapWorkUnitRow = (row: WorkUnitRow) => ({
   id: row.id,
   createdAt: row.created_at,
@@ -30,6 +39,19 @@ const fallbackWorkUnits = () => defaultWorkUnits.map((name, index) => ({
   active: true,
 }));
 
+const isSekretariatDjidContext = (senderLabel?: string | null, senderEmail?: string | null) => {
+  const normalized = `${senderLabel || ''} ${senderEmail || ''}`.trim().toLowerCase();
+  return normalized.includes('sekretariat djid') || normalized.includes(SEKRETARIAT_DJID_EMAIL);
+};
+
+const getCampaignIdFromBlastContext = (row?: BlastWorkUnitContextRow | null) => {
+  if (!row) return '';
+  if (isSekretariatDjidContext(row.sender_label, row.sender_email)) {
+    return INFRASTRUKTUR_DIGITAL_CAMPAIGN_ID;
+  }
+  return row.campaign_id || '';
+};
+
 const getWorkUnitCampaignId = async (request: NextRequest) => {
   const adminOnly = request.nextUrl.searchParams.get('admin') === '1';
   const adminScope = request.cookies.get(ADMIN_SURVEY_COOKIE)?.value;
@@ -43,14 +65,17 @@ const getWorkUnitCampaignId = async (request: NextRequest) => {
   const supabase = getSupabase();
   const query = supabase
     .from('blast_records')
-    .select('campaign_id')
+    .select('campaign_id, sender_label, sender_email')
     .limit(1);
   const { data, error } = blastId
     ? await query.eq('id', blastId)
     : await query.eq('blast_group_id', blastGroupId);
 
   if (error) throw error;
-  return data?.[0]?.campaign_id || requestedScope || adminScope || getSurveyScope(request);
+  return getCampaignIdFromBlastContext(data?.[0] as BlastWorkUnitContextRow | undefined)
+    || requestedScope
+    || adminScope
+    || getSurveyScope(request);
 };
 
 export async function GET(request: NextRequest) {

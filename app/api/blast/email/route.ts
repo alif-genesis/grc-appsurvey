@@ -149,7 +149,7 @@ const buildEmail = (
       '',
       'Kami mohon kesediaan Bapak/Ibu/Saudara/i untuk mengisi survei pada tautan/link survei berikut :',
       '',
-      surveyLink,
+      clickLink,
       '',
       'Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 09 Juni s.d. 30 Juni 2026',
       '',
@@ -161,7 +161,7 @@ const buildEmail = (
       <p>Yth. Pengguna Layanan Sekretariat Direktorat Jenderal Infrastruktur Digital,</p>
       <p>Dalam rangka meningkatkan kualitas dan optimalisasi pelayanan kepada Pegawai, Sekretariat Direktorat Jenderal Infrastruktur Digital menyelenggarakan Survei Kepuasan Pengguna Layanan Kesekretariatan (Dukungan Manajemen) dan Survei Persepsi Anti Korupsi (SPAK) atas layanan yang telah diberikan.</p>
       <p>Kami mohon kesediaan Bapak/Ibu/Saudara/i untuk mengisi survei pada tautan/link survei berikut :</p>
-      <p><a href="${safeClickLink}">${safeSurveyLink}</a></p>
+      <p><a href="${safeClickLink}">${safeClickLink}</a></p>
       <p>Bapak/Ibu/Saudara/i dapat mengisi survei untuk setiap layanan yang telah diterima dari Sekretariat dan Direktorat Jenderal Infrastruktur Digital pada tanggal 09 Juni s.d. 30 Juni 2026</p>
       <p>Partisipasi Bapak/Ibu/Saudara/i sangat berarti bagi kami dalam upaya meningkatkan kualitas pelayanan kesekretariatan di lingkungan Ditjen Infrastruktur Digital</p>
       <p>Terima kasih.</p>
