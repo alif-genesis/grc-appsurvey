@@ -20,10 +20,12 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "img-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' blob:",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' blob:",
   "style-src 'self' 'unsafe-inline'",
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ');
 

@@ -50,6 +50,7 @@ export default function MonitoringPage() {
   const [selectedService, setSelectedService] = useState('');
   const [responseServiceFilter, setResponseServiceFilter] = useState('');
   const [calculationScale, setCalculationScale] = useState<CalculationScale>(4);
+  const [downloadMessage, setDownloadMessage] = useState('');
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -104,6 +105,17 @@ export default function MonitoringPage() {
     () => activeServiceRecords.filter((record) => !responseServiceFilter || record.profile.serviceType === responseServiceFilter),
     [activeServiceRecords, responseServiceFilter],
   );
+  const runDownload = async (download: () => Promise<void>) => {
+    setDownloadMessage('Menyiapkan file download...');
+    try {
+      await download();
+      setDownloadMessage('File download sedang diproses browser.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Download gagal diproses.';
+      setDownloadMessage(message);
+    }
+  };
+
   const downloadCalculationExcel = async () => {
     const { downloadSkmExcel } = await import('../admin/report-utils');
     await downloadSkmExcel(skmCalculation);
@@ -141,6 +153,7 @@ export default function MonitoringPage() {
       />
 
       {loadMessage && <p className={`admin-data-message ${isLoading ? 'is-loading' : ''}`}>{loadMessage}</p>}
+      {downloadMessage && <p className="admin-data-message">{downloadMessage}</p>}
 
       <section className="calculation-scale-panel">
         <label>
@@ -159,7 +172,7 @@ export default function MonitoringPage() {
         <div className="section-heading-row">
           <h2>Perhitungan SKM Per Layanan</h2>
           <div className="inline-actions">
-            <button type="button" className="download-button" onClick={() => { void downloadCalculationExcel(); }}>
+            <button type="button" className="download-button" onClick={() => { void runDownload(downloadCalculationExcel); }}>
               Download Excel
             </button>
             <button type="button" className="download-button" onClick={() => { void downloadCalculationPDF(); }}>
@@ -280,7 +293,7 @@ export default function MonitoringPage() {
         <div className="section-heading-row">
           <h2>Detail Response Seluruh Responden</h2>
           <div className="inline-actions">
-            <button type="button" className="download-button" onClick={() => { void downloadResponseExcel(); }}>
+            <button type="button" className="download-button" onClick={() => { void runDownload(downloadResponseExcel); }}>
               Download Excel
             </button>
             <button type="button" className="download-button" onClick={() => { void downloadResponsePDF(); }}>
