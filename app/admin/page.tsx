@@ -28,6 +28,29 @@ const getRespondentKey = (record: SurveyRecord) => (
   record.blastGroupId
   || `${normalizeKey(record.profile.name)}-${normalizeKey(record.profile.directorate)}`
 );
+const clampPercent = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+
+const ProgressGauge = ({ value }: { value: number }) => {
+  const pct = clampPercent(value);
+  const radius = 32;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (pct / 100) * circumference;
+
+  return (
+    <svg className="gauge-ring compact-gauge-ring" viewBox="0 0 72 72" aria-hidden="true">
+      <circle className="gauge-track" cx="36" cy="36" r={radius} />
+      <circle
+        className="gauge-progress"
+        cx="36"
+        cy="36"
+        r={radius}
+        strokeDasharray={circumference}
+        strokeDashoffset={dashOffset}
+      />
+      <circle className="gauge-center compact-gauge-center" cx="36" cy="36" r="22" />
+    </svg>
+  );
+};
 
 export default function AdminPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
@@ -245,9 +268,7 @@ export default function AdminPage() {
           <h2>Progress Keseluruhan</h2>
           <div className="gauge-row">
             <div className="gauge-card compact-gauge-card">
-              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': summary.overallPopulationPercent } as any}>
-                <div className="gauge-center compact-gauge-center"></div>
-              </div>
+              <ProgressGauge value={summary.overallPopulationPercent} />
               <div className="gauge-label">
                 <small>Target</small>
                 <span>{summary.overallPopulationPercent}%</span>
@@ -255,9 +276,7 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="gauge-card compact-gauge-card">
-              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': completedServicePercent } as any}>
-                <div className="gauge-center compact-gauge-center"></div>
-              </div>
+              <ProgressGauge value={completedServicePercent} />
               <div className="gauge-label">
                 <small>Layanan</small>
                 <span>{completedServicePercent}%</span>
@@ -265,9 +284,7 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="gauge-card compact-gauge-card">
-              <div className="gauge-ring compact-gauge-ring" style={{ '--pct': completedRespondentPercent } as any}>
-                <div className="gauge-center compact-gauge-center"></div>
-              </div>
+              <ProgressGauge value={completedRespondentPercent} />
               <div className="gauge-label">
                 <small>Responden</small>
                 <span>{completedRespondentPercent}%</span>
@@ -297,7 +314,7 @@ export default function AdminPage() {
               <div className="ranking-bar-row" key={`rank-${row.name}`}>
                 <span>{row.name}</span>
                 <div className="ranking-bar-track">
-                  <div className="ranking-bar-fill" style={{ width: `${Math.min(100, row.fulfillmentPercent)}%` }} />
+                  <progress className="ranking-bar-fill" value={clampPercent(row.fulfillmentPercent)} max="100" />
                 </div>
                 <strong>{row.fulfillmentPercent}%</strong>
               </div>

@@ -14,26 +14,37 @@ const protectedApiPaths = [
 ];
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-const securityHeaders = {
+const generateNonce = () => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const buildContentSecurityPolicy = (nonce: string) => [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "img-src 'self' https://genetikasolusibisnis.co.id https://upload.wikimedia.org data:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  `script-src 'self' 'nonce-${nonce}'`,
+  `style-src 'self' 'nonce-${nonce}'`,
+  "style-src-attr 'none'",
+  "upgrade-insecure-requests",
+].join('; ');
+
+const buildSecurityHeaders = (nonce: string) => ({
+  'Strict-Transport-Security': 'max-age=15552000',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "object-src 'none'",
-    "frame-ancestors 'none'",
-    "img-src 'self' https://genetikasolusibisnis.co.id https://upload.wikimedia.org data:",
-    "connect-src 'self'",
-    "form-action 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "style-src 'self' 'unsafe-inline'",
-  ].join('; '),
-};
+  'Content-Security-Policy': buildContentSecurityPolicy(nonce),
+});
 
-const withSecurityHeaders = (response: NextResponse) => {
-  Object.entries(securityHeaders).forEach(([key, value]) => {
+const withSecurityHeaders = (response: NextResponse, nonce: string) => {
+  Object.entries(buildSecurityHeaders(nonce)).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
   return response;
@@ -90,12 +101,20 @@ const isCrossSiteMutation = (request: NextRequest) => {
 };
 
 export function proxy(request: NextRequest) {
+  const nonce = generateNonce();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('Content-Security-Policy', buildContentSecurityPolicy(nonce));
+
   if (isCrossSiteMutation(request)) {
-    return withSecurityHeaders(NextResponse.json({ error: 'Request ditolak.' }, { status: 403 }));
+    return withSecurityHeaders(NextResponse.json({ error: 'Request ditolak.' }, { status: 403 }), nonce);
   }
 
   if (!isProtectedPath(request)) {
-    return withStaticCacheHeaders(request, withSecurityHeaders(NextResponse.next()));
+    return withStaticCacheHeaders(request, withSecurityHeaders(NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    }), nonce));
   }
 
   const adminSessionSecret = process.env.ADMIN_SESSION_SECRET || '';
@@ -103,17 +122,21 @@ export function proxy(request: NextRequest) {
     && request.cookies.get(ADMIN_COOKIE)?.value === adminSessionSecret;
 
   if (isLoggedIn) {
-    return withStaticCacheHeaders(request, withSecurityHeaders(NextResponse.next()));
+    return withStaticCacheHeaders(request, withSecurityHeaders(NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    }), nonce));
   }
 
   if (request.nextUrl.pathname.startsWith('/api/')) {
-    return withSecurityHeaders(NextResponse.json({ error: 'Admin wajib login.' }, { status: 401 }));
+    return withSecurityHeaders(NextResponse.json({ error: 'Admin wajib login.' }, { status: 401 }), nonce);
   }
 
   const loginUrl = request.nextUrl.clone();
   loginUrl.pathname = '/login';
   loginUrl.searchParams.set('next', '/control');
-  return withSecurityHeaders(NextResponse.redirect(loginUrl));
+  return withSecurityHeaders(NextResponse.redirect(loginUrl), nonce);
 }
 
 export const config = {
