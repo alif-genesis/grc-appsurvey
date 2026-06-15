@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_COOKIE = 'grc_admin_session';
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const protectedPagePaths = ['/admin', '/blasting', '/control', '/list', '/monitoring', '/work-units'];
 const protectedApiPaths = [
@@ -20,9 +21,9 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "img-src 'self' data:",
-  "connect-src 'self' blob:",
+  `connect-src 'self' blob:${isDevelopment ? ' ws: wss:' : ''}`,
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' blob:",
+  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''} blob:`,
   "style-src 'self' 'unsafe-inline'",
   "worker-src 'self' blob:",
   "child-src 'self' blob:",

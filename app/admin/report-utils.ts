@@ -52,8 +52,8 @@ const qualityFormula = (scoreCell: string) => (
 );
 
 const buildSummarySheet = (summary: ReturnType<typeof getSurveySummary>): Row[] => [
-  [cell('Persentase Pemenuhan Target', true)],
-  [cell('Total Target', true), summary.overallTarget],
+  [cell('Persentase Pemenuhan Responden', true)],
+  [cell('Total Responden Layanan', true), summary.overallPopulation],
   [cell('Total Respon', true), summary.overallResponded],
   [cell('Persentase Keseluruhan', true), `${summary.overallPercent}%`],
   [],
@@ -286,7 +286,7 @@ const addGenesisLogo = async (doc: jsPDF, x = 40, y = 28, width = 90, height = 5
 
 const drawTargetChart = (doc: jsPDF, summary: ReturnType<typeof getSurveySummary>, startY: number) => {
   doc.setFontSize(12);
-  doc.text('Grafik Persentase Pemenuhan Target', 40, startY);
+  doc.text('Grafik Persentase Pemenuhan Responden', 40, startY);
   const rows = summary.serviceSummary.slice(0, 8);
   rows.forEach((row, index) => {
     const y = startY + 20 + (index * 18);
@@ -518,7 +518,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
 ) => {
   const summary = getSurveySummary(records, availableServices, populationCounts);
   const rows = [...summary.serviceSummary].sort((left, right) => (
-    right.fulfillmentPercent - left.fulfillmentPercent
+    right.percent - left.percent
     || right.responded - left.responded
     || left.name.localeCompare(right.name)
   ));
@@ -558,7 +558,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
       const y = 422 + (index * 36);
       const barWidth = 198;
       const barX = 292;
-      const fillWidth = Math.min(barWidth, Math.max(0, (row.fulfillmentPercent / 100) * barWidth));
+      const fillWidth = Math.min(barWidth, Math.max(0, (row.percent / 100) * barWidth));
 
       doc.setFillColor(111, 191, 68);
       doc.circle(52, y + 7, 3, 'F');
@@ -574,7 +574,7 @@ export const downloadSurveyFulfillmentRankingPDF = async (
       }
       doc.setTextColor(15, 78, 184);
       doc.setFontSize(8.5);
-      doc.text(`${row.fulfillmentPercent}%`, 548, y + 8, { align: 'right' });
+      doc.text(`${row.percent}%`, 548, y + 8, { align: 'right' });
       doc.setDrawColor(226, 232, 240);
       doc.line(48, y + 27, 548, y + 27);
     });
@@ -631,7 +631,7 @@ export const downloadAdminSummaryPDF = async (
     ['LAPORAN', 'SUMMARY SURVEY'],
     [
       `Diunduh: ${getDownloadedAtText()}`,
-      `Total respon: ${summary.overallResponded}/${summary.overallTarget} (${summary.overallPercent}%)`,
+      `Total respon: ${summary.overallResponded}/${summary.overallPopulation} (${summary.overallPercent}%)`,
     ],
   );
 

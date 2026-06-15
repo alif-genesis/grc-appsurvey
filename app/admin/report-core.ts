@@ -80,8 +80,8 @@ export const getSurveySummary = (
     const population = populationCounts[service.name] ?? responded;
     const target = getKrejcieMorganSampleSize(population);
     const gap = Math.max(0, target - responded);
-    const percent = target > 0 ? Math.round((responded / target) * 100) : 0;
-    const fulfillmentPercent = population > 0 ? Math.round((responded / population) * 100) : 0;
+    const targetPercent = target > 0 ? Math.round((responded / target) * 100) : 0;
+    const percent = population > 0 ? Math.round((responded / population) * 100) : 0;
     return {
       name: service.name,
       population,
@@ -89,15 +89,16 @@ export const getSurveySummary = (
       responded,
       gap,
       percent,
-      fulfillmentPercent,
+      targetPercent,
+      fulfillmentPercent: percent,
     };
   });
 
   const overallTarget = serviceSummary.reduce((sum, row) => sum + row.target, 0);
   const overallPopulation = serviceSummary.reduce((sum, row) => sum + row.population, 0);
   const overallResponded = serviceSummary.reduce((sum, row) => sum + row.responded, 0);
-  const overallPercent = overallTarget > 0 ? Math.round((overallResponded / overallTarget) * 100) : 0;
-  const overallPopulationPercent = overallPopulation > 0 ? Math.round((overallResponded / overallPopulation) * 100) : 0;
+  const overallTargetPercent = overallTarget > 0 ? Math.round((overallResponded / overallTarget) * 100) : 0;
+  const overallPercent = overallPopulation > 0 ? Math.round((overallResponded / overallPopulation) * 100) : 0;
 
   return {
     totalSurveys: records.length,
@@ -107,7 +108,8 @@ export const getSurveySummary = (
     overallTarget,
     overallResponded,
     overallPercent,
-    overallPopulationPercent,
+    overallTargetPercent,
+    overallPopulationPercent: overallPercent,
   };
 };
 
