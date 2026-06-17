@@ -230,6 +230,7 @@ export default function BlastingPage() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
   const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
+  const [isDownloadingPeople, setIsDownloadingPeople] = useState(false);
   const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
   const [historyDeleteDialog, setHistoryDeleteDialog] = useState<HistoryDeleteDialog | null>(null);
   const [activeCampaignId, setActiveCampaignId] = useState('');
@@ -540,6 +541,47 @@ export default function BlastingPage() {
     ];
 
     await writeXlsxFile(rows, { columns }).toFile('template-import-user-blasting.xlsx');
+  };
+
+  const downloadPeopleExcel = async (rowsToDownload = filteredPeople) => {
+    if (rowsToDownload.length === 0) return;
+
+    setIsDownloadingPeople(true);
+    setBlastNotice('Membuat file Excel daftar responden...');
+
+    try {
+      const { default: writeXlsxFile } = await import('write-excel-file/browser');
+      const rows = rowsToDownload.map((person, index) => {
+        const services = getPersonServices(person);
+        return {
+          nomor: index + 1,
+          nama: person.name,
+          email: person.email || '-',
+          layanan: services.join(', '),
+          link: services.length > 1
+            ? `${services.length} layanan dalam 1 link email`
+            : services[0] ? getSurveyLink(services[0], activeCampaignId) : '',
+          createdAt: formatDateTime(person.createdAt),
+          updatedAt: formatDateTime(person.updatedAt),
+        };
+      });
+      const columns = [
+        { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
+        { header: 'Nama', width: 30, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
+        { header: 'Email', width: 34, cell: (row: typeof rows[number]) => ({ value: row.email }) },
+        { header: 'Layanan', width: 72, cell: (row: typeof rows[number]) => ({ value: row.layanan }) },
+        { header: 'Link', width: 72, cell: (row: typeof rows[number]) => ({ value: row.link }) },
+        { header: 'Tanggal Ditambahkan', width: 22, cell: (row: typeof rows[number]) => ({ value: row.createdAt }) },
+        { header: 'Tanggal Diubah', width: 22, cell: (row: typeof rows[number]) => ({ value: row.updatedAt }) },
+      ];
+
+      await writeXlsxFile(rows, { columns }).toFile(`daftar-responden-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      setBlastNotice(`File Excel daftar responden dibuat (${rowsToDownload.length} orang).`);
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Download Excel daftar responden gagal.');
+    } finally {
+      setIsDownloadingPeople(false);
+    }
   };
 
   const startEditPerson = (person: BlastPerson) => {
@@ -1009,6 +1051,14 @@ export default function BlastingPage() {
           <h2>Daftar Responden</h2>
           <div className="inline-actions">
             <span>{isPeopleLoading ? 'Memuat user...' : `${selectedReadyPeople.length} dipilih dari ${people.length} orang`}</span>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => { void downloadPeopleExcel(); }}
+              disabled={filteredPeople.length === 0 || isDownloadingPeople}
+            >
+              {isDownloadingPeople ? 'Membuat Excel...' : 'Download Excel'}
+            </button>
             <button type="button" className="text-button" onClick={() => setIsImportOpen(true)}>
               Import Excel
             </button>

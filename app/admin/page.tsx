@@ -156,6 +156,10 @@ export default function AdminPage() {
   const completedRespondentPercent = people.length > 0
     ? Math.round((completedRespondentCount / people.length) * 100)
     : 0;
+  const overallBlastPopulation = people.length || summary.overallPopulation;
+  const overallBlastTargetPercent = overallBlastPopulation > 0
+    ? Math.round((summary.overallResponded / overallBlastPopulation) * 100)
+    : 0;
   const serviceRanking = useMemo(() => (
     [...summary.serviceSummary].sort((left, right) => (
       right.percent - left.percent
@@ -281,11 +285,11 @@ export default function AdminPage() {
           <h2>Progress Keseluruhan</h2>
           <div className="gauge-row">
             <div className="gauge-card compact-gauge-card">
-              <ProgressGauge value={summary.overallPopulationPercent} />
+              <ProgressGauge value={overallBlastTargetPercent} />
               <div className="gauge-label">
                 <small>Target</small>
-                <span>{summary.overallPopulationPercent}%</span>
-                <p>{summary.overallResponded}/{summary.overallPopulation}</p>
+                <span>{overallBlastTargetPercent}%</span>
+                <p>{summary.overallResponded}/{overallBlastPopulation}</p>
               </div>
             </div>
             <div className="gauge-card compact-gauge-card">
