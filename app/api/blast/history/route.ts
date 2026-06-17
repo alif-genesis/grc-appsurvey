@@ -44,7 +44,7 @@ const mapBlastRow = (row: BlastRow) => ({
 
 const HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, sender_id, sender_label, sender_email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
 const LEGACY_HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
-const SUMMARY_HISTORY_SELECT = 'id, blast_group_id, created_at, person_name, email, service_type, submitted_at';
+const SUMMARY_HISTORY_SELECT = 'id, blast_group_id, created_at, person_name, email, service_type, send_status, submitted_at';
 
 const stripSenderColumns = <T extends Record<string, unknown>>(record: T) => {
   const { sender_id, sender_label, sender_email, ...rest } = record;

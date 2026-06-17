@@ -20,6 +20,7 @@ type BlastHistory = {
   personName: string;
   email: string;
   serviceType: string;
+  status: 'Sukses' | 'Gagal' | 'Pending';
   submittedAt?: string | null;
 };
 
@@ -127,12 +128,25 @@ export default function AdminPage() {
     loadServices();
   }, []);
 
-  const servicePopulationCounts = useMemo(() => people.reduce<Record<string, number>>((acc, person) => {
+  const successfulBlastRows = useMemo(
+    () => history.filter((row) => row.status === 'Sukses'),
+    [history],
+  );
+  const successfulBlastCount = successfulBlastRows.length;
+  const peopleServicePopulationCounts = useMemo(() => people.reduce<Record<string, number>>((acc, person) => {
     person.serviceTypes.forEach((service) => {
       acc[service] = (acc[service] ?? 0) + 1;
     });
     return acc;
   }, {}), [people]);
+  const successfulBlastServicePopulationCounts = useMemo(() => successfulBlastRows.reduce<Record<string, number>>((acc, row) => {
+    if (!row.serviceType) return acc;
+    acc[row.serviceType] = (acc[row.serviceType] ?? 0) + 1;
+    return acc;
+  }, {}), [successfulBlastRows]);
+  const servicePopulationCounts = successfulBlastCount > 0
+    ? successfulBlastServicePopulationCounts
+    : peopleServicePopulationCounts;
   const surveyTargetCounts = servicePopulationCounts;
   const activeServiceRecords = useMemo(
     () => records.filter((record) => availableServices.includes(record.profile.serviceType)),
@@ -156,7 +170,7 @@ export default function AdminPage() {
   const completedRespondentPercent = people.length > 0
     ? Math.round((completedRespondentCount / people.length) * 100)
     : 0;
-  const overallBlastPopulation = people.length || summary.overallPopulation;
+  const overallBlastPopulation = successfulBlastCount || people.length || summary.overallPopulation;
   const overallBlastTargetPercent = overallBlastPopulation > 0
     ? Math.round((summary.overallResponded / overallBlastPopulation) * 100)
     : 0;
