@@ -92,7 +92,7 @@ const buildWhatsAppMessage = (person: WhatsAppRecipient, services: string[], tra
     '2. Anas Handoyo 085717345939',
     '3. Hendra Prasetyo 087870521144',
     '',
-    'Terima kasih 🙏',
+    'Terima kasih.',
   ].join('\n');
 };
 
