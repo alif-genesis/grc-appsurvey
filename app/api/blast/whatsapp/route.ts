@@ -144,10 +144,12 @@ export async function POST(request: NextRequest) {
       const trackingLink = buildTrackingLink(baseUrl, blastGroupId);
       const message = buildWhatsAppMessage(person, services, trackingLink);
       const normalizedNumber = normalizeWhatsAppNumber(person.whatsappNumber);
-      const records = services.map((serviceType) => ({
+      const createdAt = Date.now();
+      const records = services.map((serviceType, serviceIndex) => ({
         id: crypto.randomUUID(),
         campaign_id: campaignId,
         blast_group_id: blastGroupId,
+        created_at: new Date(createdAt + serviceIndex).toISOString(),
         channel: 'WhatsApp',
         person_name: person.name,
         email: '',

@@ -444,10 +444,12 @@ export async function POST(request: NextRequest) {
       const campaignId = getSurveyScope(request);
       const email = buildEmail(person, blastGroupId, publicBaseUrl, campaignId, sender.from);
       const sentAt = new Date().toISOString();
+      const createdAt = Date.now();
       const duplicateSince = new Date(Date.now() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
-      const records = services.map((serviceType) => ({
+      const records = services.map((serviceType, serviceIndex) => ({
         id: crypto.randomUUID(),
         blast_group_id: blastGroupId,
+        created_at: new Date(createdAt + serviceIndex).toISOString(),
         channel: 'Email',
         person_name: person.name,
         email: normalizedEmail,

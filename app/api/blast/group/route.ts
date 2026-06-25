@@ -10,6 +10,7 @@ type BlastGroupRow = {
   email: string;
   service_type: string;
   survey_link: string;
+  message: string;
   submitted_at: string | null;
 };
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabase();
     const query = supabase
       .from('blast_records')
-      .select('id, blast_group_id, person_name, email, service_type, survey_link, submitted_at')
+      .select('id, blast_group_id, person_name, email, service_type, survey_link, message, submitted_at')
       .eq('blast_group_id', blastGroupId)
       .order('created_at', { ascending: true });
     const { data, error } = await query;
@@ -33,7 +34,16 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     const records = Array.from(new Map(
-      (data as BlastGroupRow[]).map((row) => [row.service_type, row]),
+      (data as BlastGroupRow[])
+        .sort((left, right) => {
+          const leftPosition = left.message?.indexOf(left.service_type) ?? -1;
+          const rightPosition = right.message?.indexOf(right.service_type) ?? -1;
+          if (leftPosition < 0 && rightPosition < 0) return 0;
+          if (leftPosition < 0) return 1;
+          if (rightPosition < 0) return -1;
+          return leftPosition - rightPosition;
+        })
+        .map((row) => [row.service_type, row]),
     ).values());
 
     return NextResponse.json({
