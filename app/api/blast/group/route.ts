@@ -32,9 +32,13 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    const records = Array.from(new Map(
+      (data as BlastGroupRow[]).map((row) => [row.service_type, row]),
+    ).values());
+
     return NextResponse.json({
       blastGroupId,
-      records: (data as BlastGroupRow[]).map((row) => ({
+      records: records.map((row) => ({
         id: row.id,
         blastGroupId: row.blast_group_id,
         personName: row.person_name,

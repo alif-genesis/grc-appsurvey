@@ -85,14 +85,6 @@ const getInitialBlastContext = (): BlastContext => {
   const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
   const paramsBlastId = params.get('blastId')?.trim() || '';
   const hasSurveyParam = Boolean(params.get(SURVEY_QUERY_PARAM)?.trim());
-  if (paramsBlastId || hashBlastId || hashBlastGroupId) {
-    params.delete('blastId');
-    hashParams.delete('blastId');
-    hashParams.delete('blastGroupId');
-    const nextSearch = params.toString();
-    const nextHash = hashParams.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${nextHash ? `#${nextHash}` : ''}`);
-  }
 
   return {
     blastId: paramsBlastId || hashBlastId || (hasSurveyParam ? '' : getCookieValue('genesis_blast_id')),

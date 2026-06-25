@@ -41,12 +41,12 @@ export async function GET(request: NextRequest) {
   const { data } = blastGroupId
     ? await supabase
       .from('blast_records')
-      .select('id, survey_link')
+      .select('id, survey_link, service_type')
       .eq('blast_group_id', blastGroupId)
       .order('created_at', { ascending: true })
     : await supabase
       .from('blast_records')
-      .select('id, survey_link')
+      .select('id, survey_link, service_type')
       .eq('id', blastId)
       .limit(1);
 
@@ -61,11 +61,13 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = data ?? [];
-  const singleRow = rows.length === 1 ? rows[0] : null;
-  const redirectTarget = blastGroupId && rows.length > 1
+  const distinctServices = new Set(rows.map((row) => row.service_type).filter(Boolean));
+  const isMultiServiceGroup = Boolean(blastGroupId && distinctServices.size > 1);
+  const singleRow = !isMultiServiceGroup ? rows[0] ?? null : null;
+  const redirectTarget = isMultiServiceGroup
     ? new URL('/multi-survey', getPublicRequestOrigin(request))
     : new URL(getSafeRedirectUrl(request, singleRow?.survey_link || target));
-  if (blastGroupId && rows.length > 1) {
+  if (isMultiServiceGroup && blastGroupId) {
     redirectTarget.hash = `blastGroupId=${encodeURIComponent(blastGroupId)}`;
   } else if (blastId || singleRow?.id) {
     redirectTarget.hash = `blastId=${encodeURIComponent(blastId || singleRow?.id || '')}`;
@@ -73,13 +75,28 @@ export async function GET(request: NextRequest) {
   const redirectUrl = redirectTarget.toString();
   const response = NextResponse.redirect(redirectUrl);
 
-  if (blastGroupId) {
+  if (isMultiServiceGroup && blastGroupId) {
     response.cookies.set('genesis_blast_group_id', blastGroupId, {
       httpOnly: false,
       sameSite: 'lax',
       secure: request.nextUrl.protocol === 'https:',
       path: '/',
       maxAge: 60 * 60 * 24 * 30,
+    });
+    response.cookies.set('genesis_blast_id', '', {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      path: '/',
+      maxAge: 0,
+    });
+  } else {
+    response.cookies.set('genesis_blast_group_id', '', {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      path: '/',
+      maxAge: 0,
     });
   }
 

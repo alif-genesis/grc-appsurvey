@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceToSlug, withSurveyParam } from '../../../services';
+import { serviceToSlug } from '../../../services';
 import { formatServerError, getSupabase, getSurveyScope, scopeFilter } from '../../../supabase-server';
 
 type WhatsAppRecipient = {
@@ -21,7 +21,9 @@ const FALLBACK_PUBLIC_APP_URL = 'https://survey.genetikasolusibisnis.co.id';
 
 const normalizeServices = (value: unknown) => (
   Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    ? Array.from(new Set(value.filter(
+      (item): item is string => typeof item === 'string' && item.trim().length > 0,
+    )))
     : []
 );
 
@@ -59,19 +61,11 @@ const getSurveyLink = (baseUrl: string, serviceType: string) => (
   `${baseUrl}/${serviceToSlug(serviceType)}`
 );
 
-const buildTrackingLink = (
-  baseUrl: string,
-  blastGroupId: string,
-  services: string[],
-  campaignId: string,
-) => {
-  const target = withSurveyParam(
-    services.length > 1 ? `${baseUrl}/multi-survey` : getSurveyLink(baseUrl, services[0]),
-    campaignId,
-  );
-  const params = new URLSearchParams({ blastGroupId, target });
-  return `${baseUrl}/api/track/click?${params.toString()}`;
-};
+const uuidToShortCode = (uuid: string) => uuid.replace(/-/g, '').slice(0, 10);
+
+const buildTrackingLink = (baseUrl: string, blastGroupId: string) => (
+  `${baseUrl}/w/${uuidToShortCode(blastGroupId)}`
+);
 
 const buildWhatsAppMessage = (person: WhatsAppRecipient, services: string[], trackingLink: string) => {
   const serviceLines = services.map((service, index) => `${index + 1}. ${service}`);
@@ -147,7 +141,7 @@ export async function POST(request: NextRequest) {
     for (const person of verifiedRecipients) {
       const services = person.serviceTypes;
       const blastGroupId = crypto.randomUUID();
-      const trackingLink = buildTrackingLink(baseUrl, blastGroupId, services, campaignId);
+      const trackingLink = buildTrackingLink(baseUrl, blastGroupId);
       const message = buildWhatsAppMessage(person, services, trackingLink);
       const normalizedNumber = normalizeWhatsAppNumber(person.whatsappNumber);
       const records = services.map((serviceType) => ({

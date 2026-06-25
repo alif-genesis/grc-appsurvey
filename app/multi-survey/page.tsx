@@ -95,11 +95,6 @@ const getInitialBlastGroupId = () => {
   const searchParams = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
-  if (hashBlastGroupId) {
-    hashParams.delete('blastGroupId');
-    const nextHash = hashParams.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`);
-  }
   if (searchParams.get(SURVEY_QUERY_PARAM)?.trim()) return hashBlastGroupId;
   return hashBlastGroupId || getCookieValue('genesis_blast_group_id');
 };

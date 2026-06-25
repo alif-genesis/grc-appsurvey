@@ -91,13 +91,21 @@ const getTrackingUrl = (baseUrl: string, path: string, blastGroupId: string, tar
   return `${withPublicUrl(baseUrl, path)}?${params.toString()}`;
 };
 
+const getShortTrackingUrl = (baseUrl: string, blastGroupId: string) => (
+  withPublicUrl(baseUrl, `/w/${blastGroupId.replace(/-/g, '').slice(0, 10)}`)
+);
+
 const getRecipientServices = (person: EmailRecipient) => (
-  person.serviceTypes?.filter(Boolean) ?? (person.serviceType ? [person.serviceType] : [])
+  Array.from(new Set(person.serviceTypes?.filter(Boolean) ?? (person.serviceType ? [person.serviceType] : [])))
 );
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const normalizeServices = (value: unknown) => (
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
+  Array.isArray(value)
+    ? Array.from(new Set(value.filter(
+      (item): item is string => typeof item === 'string' && item.trim().length > 0,
+    )))
+    : []
 );
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
@@ -131,7 +139,7 @@ const buildEmail = (
     services.length > 1 ? getMultiSurveyLink(baseUrl) : getSurveyLink(baseUrl, services[0]),
     campaignId,
   );
-  const clickLink = getTrackingUrl(baseUrl, '/api/track/click', blastGroupId, surveyLink);
+  const clickLink = getShortTrackingUrl(baseUrl, blastGroupId);
   const openPixel = getTrackingUrl(baseUrl, '/api/track/open', blastGroupId);
   const serviceListText = services.map((service, index) => `${index + 1}. ${service}`).join('\n');
   const serviceListHtml = services.map((service) => `<li>${escapeHtml(service)}</li>`).join('');
