@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { PUBLIC_SURVEY_URL, serviceToSlug, withBasePath, withSurveyParam } from '../services';
 import { AdminFooter, AdminHeader } from '../admin/admin-chrome';
 
@@ -10,24 +10,27 @@ type BlastPerson = {
   updatedAt?: string;
   name: string;
   email: string;
+  whatsappNumber: string;
   serviceType?: string;
   serviceTypes: string[];
 };
 
-type BlastPersonDraft = Pick<BlastPerson, 'name' | 'email' | 'serviceTypes'>;
+type BlastPersonDraft = Pick<BlastPerson, 'name' | 'email' | 'whatsappNumber' | 'serviceTypes'>;
 
 type BlastHistory = {
   id: string;
   blastGroupId?: string | null;
+  channel?: 'Email' | 'WhatsApp';
   personName: string;
   email: string;
+  whatsappNumber?: string;
   senderId?: string;
   senderLabel?: string;
   senderEmail?: string;
   serviceType: string;
   surveyLink: string;
   message: string;
-  status: 'Sukses' | 'Gagal';
+  status: 'Sukses' | 'Gagal' | 'Pending';
   error?: string;
   createdAt: string;
   sentAt?: string | null;
@@ -38,6 +41,7 @@ type BlastHistory = {
 
 type EmailBlastResult = Omit<BlastHistory, 'createdAt'>;
 type ImportPerson = Pick<BlastPerson, 'name' | 'email' | 'serviceTypes'> & {
+  whatsappNumber: string;
   rowNumber: number;
 };
 type EmailSender = {
@@ -58,6 +62,17 @@ type HistoryDeleteDialog = {
   count: number;
   ids?: string[];
 };
+type WhatsAppQueueItem = {
+  blastGroupId: string;
+  personId: string;
+  personName: string;
+  whatsappNumber: string;
+  services: string[];
+  trackingLink: string;
+  message: string;
+  whatsappUrl: string;
+  recordIds: string[];
+};
 
 const PEOPLE_STORAGE_KEY = 'genesis-blasting-people';
 const MAX_EMAIL_RECIPIENTS = 5;
@@ -66,6 +81,7 @@ const EMAIL_BATCH_DELAY_MS = 3000;
 const createEmptyPerson = (services: string[] = []) => ({
   name: '',
   email: '',
+  whatsappNumber: '',
   serviceTypes: services[0] ? [services[0]] : [],
 });
 
@@ -89,6 +105,12 @@ const getSenderDisplayLabel = (row: Pick<BlastHistory, 'senderEmail' | 'senderLa
 const formatDateTime = (value?: string | null) => (
   value ? new Date(value).toLocaleString('id-ID') : '-'
 );
+
+const isValidWhatsAppNumber = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  const normalized = digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
+  return /^628\d{7,12}$/.test(normalized);
+};
 
 const downloadBlobFile = (blob: Blob, filename: string) => {
   const url = window.URL.createObjectURL(blob);
@@ -217,6 +239,10 @@ export default function BlastingPage() {
   const [importMessage, setImportMessage] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isEmailBlasting, setIsEmailBlasting] = useState(false);
+  const [isWhatsAppBlasting, setIsWhatsAppBlasting] = useState(false);
+  const [isWhatsAppQueueBusy, setIsWhatsAppQueueBusy] = useState(false);
+  const [whatsAppQueue, setWhatsAppQueue] = useState<WhatsAppQueueItem[]>([]);
+  const [whatsAppQueueIndex, setWhatsAppQueueIndex] = useState(0);
   const [isResettingBlast, setIsResettingBlast] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPeopleLoading, setIsPeopleLoading] = useState(false);
@@ -322,6 +348,7 @@ export default function BlastingPage() {
       const matchesSearch = !query || [
         person.name,
         person.email,
+        person.whatsappNumber,
         services.join(' '),
       ].join(' ').toLowerCase().includes(query);
       const matchesService = !peopleServiceFilter || services.includes(peopleServiceFilter);
@@ -345,6 +372,7 @@ export default function BlastingPage() {
       const matchesSearch = !query || [
         row.personName,
         row.email,
+        row.whatsappNumber,
         row.senderLabel,
         row.senderEmail,
         row.serviceType,
@@ -420,6 +448,7 @@ export default function BlastingPage() {
 
       const loadedPeople = (payload.people ?? []).map((person) => ({
         ...person,
+        whatsappNumber: person.whatsappNumber || '',
         serviceTypes: getPersonServices(person).filter((service) => servicesOverride.includes(service)),
       }));
       window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
@@ -471,6 +500,7 @@ export default function BlastingPage() {
         rowNumber: index + 2,
         name: getImportValue(row, ['nama', 'name', 'nama lengkap', 'namalengkap']),
         email: getImportValue(row, ['email', 'alamat email', 'alamatemail', 'e-mail']),
+        whatsappNumber: getImportValue(row, ['nomor wa', 'nomorwa', 'whatsapp', 'wa', 'no wa', 'nowa']),
         serviceTypes: parseImportServices(row, availableServices),
       })).filter((row) => row.name && row.serviceTypes.length > 0);
 
@@ -526,17 +556,20 @@ export default function BlastingPage() {
       {
         Nama: 'Nama Responden 1',
         Email: 'responden1@example.com',
+        'Nomor WA': '085612345678',
         Layanan: availableServices.slice(0, 2).join(', '),
       },
       {
         Nama: 'Nama Responden 2',
         Email: 'responden2@example.com',
+        'Nomor WA': '6285612345679',
         Layanan: availableServices[0] || '',
       },
     ];
     const columns = [
       { header: 'Nama', width: 28, cell: (row: typeof rows[number]) => ({ value: row.Nama }) },
       { header: 'Email', width: 30, cell: (row: typeof rows[number]) => ({ value: row.Email }) },
+      { header: 'Nomor WA', width: 22, cell: (row: typeof rows[number]) => ({ value: row['Nomor WA'] }) },
       { header: 'Layanan', width: 80, cell: (row: typeof rows[number]) => ({ value: row.Layanan }) },
     ];
 
@@ -557,6 +590,7 @@ export default function BlastingPage() {
           nomor: index + 1,
           nama: person.name,
           email: person.email || '-',
+          whatsappNumber: person.whatsappNumber || '-',
           layanan: services.join(', '),
           link: services.length > 1
             ? `${services.length} layanan dalam 1 link email`
@@ -569,6 +603,7 @@ export default function BlastingPage() {
         { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
         { header: 'Nama', width: 30, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
         { header: 'Email', width: 34, cell: (row: typeof rows[number]) => ({ value: row.email }) },
+        { header: 'Nomor WA', width: 22, cell: (row: typeof rows[number]) => ({ value: row.whatsappNumber }) },
         { header: 'Layanan', width: 72, cell: (row: typeof rows[number]) => ({ value: row.layanan }) },
         { header: 'Link', width: 72, cell: (row: typeof rows[number]) => ({ value: row.link }) },
         { header: 'Tanggal Ditambahkan', width: 22, cell: (row: typeof rows[number]) => ({ value: row.createdAt }) },
@@ -590,6 +625,7 @@ export default function BlastingPage() {
       [person.id]: {
         name: person.name,
         email: person.email,
+        whatsappNumber: person.whatsappNumber,
         serviceTypes: getPersonServices(person),
       },
     }));
@@ -813,6 +849,91 @@ export default function BlastingPage() {
     }
   };
 
+  const startWhatsAppBlast = async () => {
+    const recipients = blastTargets.filter((person) => isValidWhatsAppNumber(person.whatsappNumber || ''));
+    if (recipients.length === 0) {
+      setBlastNotice('Pilih user yang sudah memiliki nomor WA valid (08... atau 628...).');
+      return;
+    }
+
+    setIsWhatsAppBlasting(true);
+    setBlastNotice('Menyiapkan link unik dan antrean WhatsApp...');
+
+    try {
+      const response = await fetch(withBasePath('/api/blast/whatsapp'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipients }),
+      });
+      const payload = await response.json() as { queue?: WhatsAppQueueItem[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Antrean WhatsApp gagal dibuat.');
+
+      const queue = payload.queue ?? [];
+      setWhatsAppQueue(queue);
+      setWhatsAppQueueIndex(0);
+      setBlastNotice(`${queue.length} penerima masuk antrean WhatsApp. Kirim satu per satu melalui dialog.`);
+      await refreshHistory();
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Antrean WhatsApp gagal dibuat.');
+    } finally {
+      setIsWhatsAppBlasting(false);
+    }
+  };
+
+  const updateWhatsAppQueueStatus = useCallback(async (
+    item: WhatsAppQueueItem,
+    status: 'sent' | 'failed',
+  ) => {
+    if (isWhatsAppQueueBusy) return;
+
+    const nextIndex = whatsAppQueueIndex + 1;
+
+    setIsWhatsAppQueueBusy(true);
+    try {
+      const response = await fetch(withBasePath('/api/blast/whatsapp'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blastGroupId: item.blastGroupId, status }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Status WhatsApp gagal diperbarui.');
+
+      if (nextIndex >= whatsAppQueue.length) {
+        setWhatsAppQueue([]);
+        setWhatsAppQueueIndex(0);
+        setBlastNotice('Antrean blast WhatsApp selesai diproses.');
+      } else {
+        setWhatsAppQueueIndex(nextIndex);
+        setBlastNotice(
+          `${status === 'sent' ? 'Ditandai terkirim' : 'Dilewati'}: ${item.personName}. `
+          + `Lanjut ${nextIndex + 1}/${whatsAppQueue.length}.`,
+        );
+      }
+      await refreshHistory();
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Status WhatsApp gagal diperbarui.');
+    } finally {
+      setIsWhatsAppQueueBusy(false);
+    }
+  }, [isWhatsAppQueueBusy, whatsAppQueue, whatsAppQueueIndex]);
+
+  useEffect(() => {
+    const item = whatsAppQueue[whatsAppQueueIndex];
+    if (!item) return undefined;
+
+    const handleQuickWhatsAppKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.repeat || isWhatsAppQueueBusy) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.matches('input, select, textarea')) return;
+
+      event.preventDefault();
+      void updateWhatsAppQueueStatus(item, 'sent');
+    };
+
+    window.addEventListener('keydown', handleQuickWhatsAppKey);
+    return () => window.removeEventListener('keydown', handleQuickWhatsAppKey);
+  }, [isWhatsAppQueueBusy, updateWhatsAppQueueStatus, whatsAppQueue, whatsAppQueueIndex]);
+
   const requestClearHistory = () => {
     if (history.length === 0 || isDeletingHistory) return;
     setHistoryDeleteDialog({ kind: 'clear', count: history.length });
@@ -900,7 +1021,9 @@ export default function BlastingPage() {
             id: row.id,
             createdAt: row.createdAt,
             personName: row.personName,
+            channel: row.channel,
             email: row.email,
+            whatsappNumber: row.whatsappNumber,
             senderLabel: row.senderLabel,
             senderEmail: row.senderEmail,
             serviceType: row.serviceType,
@@ -946,7 +1069,7 @@ export default function BlastingPage() {
   };
 
   const requestResetBlast = () => {
-    if (isResettingBlast || isEmailBlasting) return;
+    if (isResettingBlast || isEmailBlasting || isWhatsAppBlasting || whatsAppQueue.length > 0) return;
     setIsResetConfirmOpen(true);
   };
 
@@ -982,6 +1105,8 @@ export default function BlastingPage() {
     }
   };
 
+  const activeWhatsAppQueueItem = whatsAppQueue[whatsAppQueueIndex];
+
   return (
     <main className="page-shell admin-shell">
       <AdminHeader
@@ -1010,7 +1135,7 @@ export default function BlastingPage() {
             type="button"
             className="text-button danger-button"
             onClick={requestResetBlast}
-            disabled={isResettingBlast || isEmailBlasting}
+            disabled={isResettingBlast || isEmailBlasting || isWhatsAppBlasting}
           >
             {isResettingBlast ? 'Mereset...' : 'Reset Blast'}
           </button>
@@ -1071,7 +1196,7 @@ export default function BlastingPage() {
             <input
               value={peopleSearch}
               onChange={(event) => setPeopleSearch(event.target.value)}
-              placeholder="Nama, email, layanan"
+              placeholder="Nama, email, nomor WA, layanan"
             />
           </label>
           <label>
@@ -1102,6 +1227,15 @@ export default function BlastingPage() {
               value={newPerson.email}
               onChange={(event) => setNewPerson((current) => ({ ...current, email: event.target.value }))}
               placeholder="responden@example.com"
+            />
+          </label>
+          <label>
+            Nomor WA
+            <input
+              inputMode="tel"
+              value={newPerson.whatsappNumber}
+              onChange={(event) => setNewPerson((current) => ({ ...current, whatsappNumber: event.target.value }))}
+              placeholder="0856... atau 62856..."
             />
           </label>
           <label>
@@ -1143,6 +1277,7 @@ export default function BlastingPage() {
                     </button>
                   </th>
                   <th>Email</th>
+                  <th>Nomor WA</th>
                   <th>Layanan</th>
                   <th>Link</th>
                   <th>Aksi</th>
@@ -1189,6 +1324,18 @@ export default function BlastingPage() {
                       </td>
                       <td>
                         {isEditing ? (
+                          <input
+                            inputMode="tel"
+                            value={visiblePerson.whatsappNumber}
+                            onChange={(event) => updatePersonDraft(person.id, 'whatsappNumber', event.target.value)}
+                            placeholder="0856... / 62856..."
+                          />
+                        ) : (
+                          <span className="table-plain-text">{person.whatsappNumber || '-'}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
                           <div className="service-checkbox-list compact-service-list">
                             {availableServices.map((service) => (
                               <label key={service} className="service-checkbox-item">
@@ -1213,7 +1360,7 @@ export default function BlastingPage() {
                         {visibleServices.length === 0 ? (
                           <span className="error-message validation-message">Belum ada layanan aktif. Edit dan pilih layanan dulu.</span>
                         ) : visibleServices.length > 1 ? (
-                          <span>{visibleServices.length} layanan dalam 1 link email</span>
+                          <span>{visibleServices.length} layanan dalam 1 link blast</span>
                         ) : (
                           <a href={getSurveyLink(visibleServices[0], activeCampaignId)}>{getSurveyLink(visibleServices[0], activeCampaignId)}</a>
                         )}
@@ -1255,12 +1402,29 @@ export default function BlastingPage() {
           onClick={startEmailBlast}
           disabled={
             isEmailBlasting
+            || whatsAppQueue.length > 0
             || !selectedSenderId
             || blastTargets.every((person) => !person.email.trim())
           }
         >
           <span>{isEmailBlasting ? 'Mengirim Email...' : 'Start Blast Email'}</span>
           <small>{selectedSenderId ? `${blastTargets.filter((person) => person.email.trim()).length} penerima siap, batch ${MAX_EMAIL_RECIPIENTS} orang` : 'Pilih sender email terlebih dahulu'}</small>
+        </button>
+        <button
+          type="button"
+          className="blast-action-card whatsapp-action-card"
+          onClick={startWhatsAppBlast}
+          disabled={
+            isWhatsAppBlasting
+            || isEmailBlasting
+            || whatsAppQueue.length > 0
+            || blastTargets.every((person) => !isValidWhatsAppNumber(person.whatsappNumber || ''))
+          }
+        >
+          <span>{isWhatsAppBlasting ? 'Menyiapkan WhatsApp...' : 'Start Blast WA'}</span>
+          <small>
+            {blastTargets.filter((person) => isValidWhatsAppNumber(person.whatsappNumber || '')).length} penerima siap
+          </small>
         </button>
       </section>
 
@@ -1300,7 +1464,7 @@ export default function BlastingPage() {
             <input
               value={historySearch}
               onChange={(event) => setHistorySearch(event.target.value)}
-              placeholder="Nama, email, layanan, status"
+              placeholder="Nama, email/WA, layanan, status"
             />
           </label>
           <label>
@@ -1376,11 +1540,20 @@ export default function BlastingPage() {
                     <td>{new Date(row.createdAt).toLocaleString('id-ID')}</td>
                     <td>{row.personName}</td>
                     <td>
-                      <span className="channel-badge email-channel">Email</span>
-                      <span className="history-target">{row.email}</span>
+                      <span className={`channel-badge ${row.channel === 'WhatsApp' ? 'whatsapp-channel' : 'email-channel'}`}>
+                        {row.channel === 'WhatsApp' ? 'WhatsApp' : 'Email'}
+                      </span>
+                      <span className="history-target">
+                        {row.channel === 'WhatsApp' ? row.whatsappNumber : row.email}
+                      </span>
                     </td>
                     <td>
-                      {row.senderEmail ? (
+                      {row.channel === 'WhatsApp' ? (
+                        <span className="sender-pill">
+                          <strong>WhatsApp Web</strong>
+                          <small>Operator</small>
+                        </span>
+                      ) : row.senderEmail ? (
                         <span className="sender-pill">
                           <strong>{getSenderDisplayLabel(row)}</strong>
                           <small>{row.senderEmail}</small>
@@ -1422,6 +1595,64 @@ export default function BlastingPage() {
         )}
       </section>
 
+      {activeWhatsAppQueueItem && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="whatsapp-queue-title">
+          <div className="import-modal whatsapp-queue-modal">
+            <div className="section-heading-row">
+              <div>
+                <p className="agency">Blast WhatsApp {whatsAppQueueIndex + 1}/{whatsAppQueue.length}</p>
+                <h2 id="whatsapp-queue-title">{activeWhatsAppQueueItem.personName}</h2>
+              </div>
+              <span className="channel-badge whatsapp-channel">WhatsApp</span>
+            </div>
+
+            <div className="whatsapp-queue-summary">
+              <p><strong>Nomor:</strong> {activeWhatsAppQueueItem.whatsappNumber}</p>
+              <p><strong>Layanan:</strong> {activeWhatsAppQueueItem.services.join(', ')}</p>
+              <p className="table-plain-text">
+                Buka WhatsApp dan tekan Send. Setelah kembali ke app, tekan Enter untuk
+                mengonfirmasi dan menampilkan penerima berikutnya. WhatsApp berikutnya
+                baru dibuka saat Anda menekan tombol Buka WhatsApp lagi.
+              </p>
+            </div>
+
+            <textarea
+              className="whatsapp-message-preview"
+              value={activeWhatsAppQueueItem.message}
+              readOnly
+              rows={11}
+              aria-label="Preview pesan WhatsApp"
+            />
+
+            <div className="modal-actions whatsapp-queue-actions">
+              <a
+                className="download-button"
+                href={activeWhatsAppQueueItem.whatsappUrl}
+                target="whatsapp-blast"
+              >
+                Buka WhatsApp
+              </a>
+              <button
+                type="button"
+                className="download-button whatsapp-confirm-button"
+                onClick={() => { void updateWhatsAppQueueStatus(activeWhatsAppQueueItem, 'sent'); }}
+                disabled={isWhatsAppQueueBusy}
+              >
+                {isWhatsAppQueueBusy ? 'Menyimpan...' : 'Sudah Dikirim & Lanjut (Enter)'}
+              </button>
+              <button
+                type="button"
+                className="admin-link secondary-admin-link"
+                onClick={() => { void updateWhatsAppQueueStatus(activeWhatsAppQueueItem, 'failed'); }}
+                disabled={isWhatsAppQueueBusy}
+              >
+                Lewati
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isImportOpen && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="import-title">
           <div className="import-modal">
@@ -1441,7 +1672,7 @@ export default function BlastingPage() {
             </div>
 
             <div className="import-help">
-              <p>Gunakan kolom: Nama, Email, Layanan.</p>
+              <p>Gunakan kolom: Nama, Email, Nomor WA, Layanan.</p>
               <p>Untuk beberapa layanan, pisahkan dengan koma di kolom Layanan.</p>
               <button type="button" className="download-button import-template-button" onClick={downloadImportTemplate}>
                 Download Template Excel
@@ -1474,6 +1705,7 @@ export default function BlastingPage() {
                         <th>Baris</th>
                         <th>Nama</th>
                         <th>Email</th>
+                        <th>Nomor WA</th>
                         <th>Layanan</th>
                       </tr>
                     </thead>
@@ -1483,6 +1715,7 @@ export default function BlastingPage() {
                           <td>{row.rowNumber}</td>
                           <td>{row.name}</td>
                           <td>{row.email || '-'}</td>
+                          <td>{row.whatsappNumber || '-'}</td>
                           <td>{row.serviceTypes.join(', ')}</td>
                         </tr>
                       ))}

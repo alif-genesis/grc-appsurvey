@@ -1542,6 +1542,16 @@ select {
   font-weight: 600;
 }
 
+.whatsapp-action-card {
+  border-color: rgba(22, 163, 74, 0.25);
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+}
+
+.whatsapp-action-card:hover:not(:disabled) {
+  border-color: #16a34a;
+  box-shadow: 0 18px 40px rgba(22, 163, 74, 0.14);
+}
+
 .blast-section {
   margin-bottom: 24px;
 }
@@ -1723,7 +1733,7 @@ select {
 
 .add-person-form {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr) minmax(320px, 1.2fr) minmax(220px, 0.8fr);
+  grid-template-columns: minmax(190px, 0.9fr) minmax(230px, 1fr) minmax(190px, 0.8fr) minmax(320px, 1.2fr) minmax(180px, 0.7fr);
   gap: 12px;
   align-items: center;
   margin-bottom: 20px;
@@ -1833,7 +1843,7 @@ select {
 
 .people-table {
   table-layout: fixed;
-  min-width: 1180px;
+  min-width: 1420px;
 }
 
 .blast-table th,
@@ -1864,16 +1874,21 @@ select {
 
 .people-table th:nth-child(4),
 .people-table td:nth-child(4) {
-  width: 360px;
+  width: 190px;
 }
 
 .people-table th:nth-child(5),
 .people-table td:nth-child(5) {
-  width: 300px;
+  width: 360px;
 }
 
 .people-table th:nth-child(6),
 .people-table td:nth-child(6) {
+  width: 300px;
+}
+
+.people-table th:nth-child(7),
+.people-table td:nth-child(7) {
   width: 120px;
 }
 
@@ -1971,6 +1986,49 @@ select {
 .email-channel {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.whatsapp-channel {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.whatsapp-queue-modal {
+  width: min(720px, 100%);
+}
+
+.whatsapp-queue-summary {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 14px;
+  background: #f0fdf4;
+}
+
+.whatsapp-queue-summary p {
+  margin: 0;
+}
+
+.whatsapp-message-preview {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 14px;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.whatsapp-queue-actions {
+  justify-content: flex-start;
+}
+
+.whatsapp-confirm-button {
+  background: #15803d;
+  box-shadow: 0 12px 28px rgba(21, 128, 61, 0.2);
 }
 
 .sender-pill {

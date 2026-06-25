@@ -189,13 +189,18 @@ export default function HomePage() {
     const checkSubmission = async () => {
       try {
         const response = await fetch(withBasePath(withBlastParams('/api/blast/status', blastContext)), { cache: 'no-store' });
-        const payload = await response.json() as { submitted?: boolean; error?: string };
+        const payload = await response.json() as { submitted?: boolean; personName?: string; error?: string };
 
         if (response.ok && payload.submitted) {
           setHasExistingSubmission(true);
           setSubmitted(true);
           allowNavigationRef.current = true;
           window.location.assign(withBasePath('/submitted'));
+        } else if (response.ok && payload.personName) {
+          setProfile((current) => ({
+            ...current,
+            name: current.name.trim() ? current.name : payload.personName || current.name,
+          }));
         }
       } catch {
         // Status check is a convenience guard; submit API still prevents duplicates.

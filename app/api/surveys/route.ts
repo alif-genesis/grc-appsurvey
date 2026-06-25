@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     if (survey.blastId) {
       const existingBlastQuery = supabase
         .from('blast_records')
-        .select('submitted_at, campaign_id')
+        .select('submitted_at, campaign_id, person_name, service_type')
         .eq('id', survey.blastId)
         .maybeSingle();
       const { data: existingBlast, error: existingBlastError } = await existingBlastQuery;
@@ -146,14 +146,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Survey untuk link ini sudah pernah disubmit.' }, { status: 409 });
       }
       if (existingBlast?.campaign_id) campaignId = existingBlast.campaign_id;
+      if (existingBlast?.person_name) profile.name = existingBlast.person_name;
+      if (existingBlast?.service_type && existingBlast.service_type !== profile.serviceType) {
+        return NextResponse.json({ error: 'Layanan survey tidak sesuai dengan link blast.' }, { status: 400 });
+      }
     } else if (survey.blastGroupId) {
       const { data: groupRows, error: groupError } = await supabase
         .from('blast_records')
-        .select('campaign_id')
+        .select('campaign_id, person_name, service_type')
         .eq('blast_group_id', survey.blastGroupId)
-        .limit(1);
+        .order('created_at', { ascending: true });
       if (groupError) throw groupError;
       if (groupRows?.[0]?.campaign_id) campaignId = groupRows[0].campaign_id;
+      if (groupRows?.[0]?.person_name) profile.name = groupRows[0].person_name;
+      if (groupRows?.length && !groupRows.some((row) => row.service_type === profile.serviceType)) {
+        return NextResponse.json({ error: 'Layanan survey tidak sesuai dengan link blast.' }, { status: 400 });
+      }
     }
 
     if (!await isActiveCampaign(campaignId)) {

@@ -7,12 +7,25 @@ type BlastPersonRow = {
   updated_at: string;
   name: string;
   email: string;
+  whatsapp_number?: string | null;
   service_types: unknown;
 };
 
 const normalizeServices = (value: unknown) => (
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
 );
+const isValidWhatsAppNumber = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  const normalized = digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
+  return /^628\d{7,12}$/.test(normalized);
+};
+const isMissingWhatsAppColumn = (error: unknown) => {
+  const value = error as { code?: string; message?: string; details?: string } | null;
+  const text = `${value?.message || ''} ${value?.details || ''}`.toLowerCase();
+  return value?.code === '42703'
+    || value?.code === 'PGRST204'
+    || text.includes('whatsapp_number');
+};
 
 const getAllowedServices = async (request: NextRequest) => {
   const supabase = getSupabase();
@@ -31,6 +44,7 @@ const mapPersonRow = (row: BlastPersonRow) => ({
   updatedAt: row.updated_at,
   name: row.name,
   email: row.email,
+  whatsappNumber: row.whatsapp_number ?? '',
   serviceTypes: normalizeServices(row.service_types),
 });
 
@@ -66,18 +80,32 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabase();
     const query = supabase
       .from('blast_people')
-      .select('id, created_at, updated_at, name, email, service_types')
+      .select('id, created_at, updated_at, name, email, whatsapp_number, service_types')
       .order('created_at', { ascending: false });
-    const { data, error } = await scopeFilter(query, true, request);
+    let { data, error }: { data: unknown; error: unknown } = await scopeFilter(query, true, request);
+
+    if (error && isMissingWhatsAppColumn(error)) {
+      const legacyQuery = supabase
+        .from('blast_people')
+        .select('id, created_at, updated_at, name, email, service_types')
+        .order('created_at', { ascending: false });
+      const legacyResult = await scopeFilter(legacyQuery, true, request);
+      data = legacyResult.data;
+      error = legacyResult.error;
+    }
 
     if (error) throw error;
+    const rows = (data as BlastPersonRow[]).map((row) => ({
+      ...row,
+      whatsapp_number: row.whatsapp_number ?? '',
+    }));
 
     if (request.nextUrl.searchParams.get('sync') === '0') {
-      return NextResponse.json({ people: (data as BlastPersonRow[]).map(mapPersonRow) });
+      return NextResponse.json({ people: rows.map(mapPersonRow) });
     }
 
     const allowedServices = await getAllowedServices(request);
-    const syncedRows = await syncPersonServices(supabase, data as BlastPersonRow[], allowedServices);
+    const syncedRows = await syncPersonServices(supabase, rows, allowedServices);
     return NextResponse.json({ people: syncedRows.map(mapPersonRow) });
   } catch (error) {
     return NextResponse.json(
@@ -92,10 +120,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as {
       name?: string;
       email?: string;
+      whatsappNumber?: string;
       serviceTypes?: unknown;
     };
     const name = body.name?.trim() || '';
     const email = body.email?.trim() || '';
+    const whatsappNumber = body.whatsappNumber?.trim() || '';
     const serviceTypes = normalizeServices(body.serviceTypes);
 
     if (!name) {
@@ -104,23 +134,49 @@ export async function POST(request: NextRequest) {
     if (serviceTypes.length === 0) {
       return NextResponse.json({ error: 'Pilih minimal satu layanan.' }, { status: 400 });
     }
+    if (whatsappNumber && !isValidWhatsAppNumber(whatsappNumber)) {
+      return NextResponse.json({ error: 'Nomor WA harus menggunakan format 08... atau 628...' }, { status: 400 });
+    }
     const allowedServices = await getAllowedServices(request);
     if (allowedServices.size > 0 && serviceTypes.some((service) => !allowedServices.has(service))) {
       return NextResponse.json({ error: 'Layanan user tidak sesuai dengan survey aktif.' }, { status: 400 });
     }
 
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    let { data, error }: { data: unknown; error: unknown } = await supabase
       .from('blast_people')
       .insert({
         id: crypto.randomUUID(),
         campaign_id: getSurveyScope(request),
         name,
         email,
+        whatsapp_number: whatsappNumber,
         service_types: serviceTypes,
       })
-      .select('id, created_at, updated_at, name, email, service_types')
+      .select('id, created_at, updated_at, name, email, whatsapp_number, service_types')
       .single();
+
+    if (error && isMissingWhatsAppColumn(error)) {
+      if (whatsappNumber) {
+        return NextResponse.json(
+          { error: 'Kolom Nomor WA belum tersedia di Supabase. Jalankan supabase-whatsapp-migration.sql terlebih dahulu.' },
+          { status: 503 },
+        );
+      }
+      const legacyResult = await supabase
+        .from('blast_people')
+        .insert({
+          id: crypto.randomUUID(),
+          campaign_id: getSurveyScope(request),
+          name,
+          email,
+          service_types: serviceTypes,
+        })
+        .select('id, created_at, updated_at, name, email, service_types')
+        .single();
+      data = legacyResult.data;
+      error = legacyResult.error;
+    }
 
     if (error) throw error;
 

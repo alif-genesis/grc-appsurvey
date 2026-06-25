@@ -6,7 +6,9 @@ type BlastExportRecord = {
   id: string;
   createdAt: string;
   personName: string;
+  channel?: 'Email' | 'WhatsApp';
   email: string;
+  whatsappNumber?: string | null;
   senderLabel?: string | null;
   senderEmail?: string | null;
   serviceType: string;
@@ -74,7 +76,9 @@ export async function POST(request: NextRequest) {
       nomor: index + 1,
       waktu: formatDateTime(row.createdAt),
       nama: row.personName,
+      channel: row.channel || 'Email',
       email: row.email,
+      whatsappNumber: row.whatsappNumber || '',
       sender: getSenderDisplayLabel(row),
       senderEmail: row.senderEmail || '',
       layanan: row.serviceType,
@@ -91,7 +95,9 @@ export async function POST(request: NextRequest) {
       { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
       { header: 'Waktu', width: 22, cell: (row: typeof rows[number]) => ({ type: String, value: row.waktu }) },
       { header: 'Nama', width: 26, cell: (row: typeof rows[number]) => ({ type: String, value: row.nama }) },
+      { header: 'Kanal', width: 14, cell: (row: typeof rows[number]) => ({ type: String, value: row.channel }) },
       { header: 'Email', width: 34, cell: (row: typeof rows[number]) => ({ type: String, value: row.email }) },
+      { header: 'Nomor WA', width: 22, cell: (row: typeof rows[number]) => ({ type: String, value: row.whatsappNumber }) },
       { header: 'Sender', width: 24, cell: (row: typeof rows[number]) => ({ type: String, value: row.sender }) },
       { header: 'Email Sender', width: 34, cell: (row: typeof rows[number]) => ({ type: String, value: row.senderEmail }) },
       { header: 'Layanan', width: 52, cell: (row: typeof rows[number]) => ({ type: String, value: row.layanan }) },

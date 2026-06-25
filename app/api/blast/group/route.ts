@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
       .from('blast_records')
       .select('id, blast_group_id, person_name, email, service_type, survey_link, submitted_at')
       .eq('blast_group_id', blastGroupId)
-      .eq('channel', 'Email')
       .order('created_at', { ascending: true });
     const { data, error } = await query;
 

@@ -5,9 +5,10 @@ type BlastRow = {
   id: string;
   blast_group_id: string | null;
   created_at: string;
-  channel: 'Email';
+  channel: 'Email' | 'WhatsApp';
   person_name: string;
   email: string;
+  whatsapp_number?: string | null;
   sender_id?: string | null;
   sender_label?: string | null;
   sender_email?: string | null;
@@ -26,7 +27,9 @@ const mapBlastRow = (row: BlastRow) => ({
   id: row.id,
   blastGroupId: row.blast_group_id,
   personName: row.person_name,
+  channel: row.channel,
   email: row.email,
+  whatsappNumber: row.whatsapp_number ?? '',
   senderId: row.sender_id ?? '',
   senderLabel: row.sender_label ?? '',
   senderEmail: row.sender_email ?? '',
@@ -42,7 +45,7 @@ const mapBlastRow = (row: BlastRow) => ({
   submittedAt: row.submitted_at,
 });
 
-const HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, sender_id, sender_label, sender_email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
+const HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, whatsapp_number, sender_id, sender_label, sender_email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
 const LEGACY_HISTORY_SELECT = 'id, blast_group_id, created_at, channel, person_name, email, service_type, survey_link, message, send_status, error, sent_at, opened_at, clicked_at, submitted_at';
 const SUMMARY_HISTORY_SELECT = 'id, blast_group_id, created_at, person_name, email, service_type, send_status, submitted_at';
 
@@ -58,7 +61,6 @@ export async function GET(request: NextRequest) {
     const query = supabase
       .from('blast_records')
       .select(summaryOnly ? SUMMARY_HISTORY_SELECT : HISTORY_SELECT)
-      .eq('channel', 'Email')
       .order('created_at', { ascending: false });
     let { data, error }: { data: unknown; error: unknown } = await scopeFilter(query, true, request);
 
@@ -66,7 +68,6 @@ export async function GET(request: NextRequest) {
       const legacyQuery = supabase
         .from('blast_records')
         .select(LEGACY_HISTORY_SELECT)
-        .eq('channel', 'Email')
         .order('created_at', { ascending: false });
       const legacyResult = await scopeFilter(legacyQuery, true, request);
       data = legacyResult.data;
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
       records: (data as BlastRow[]).map((row) => mapBlastRow({
         ...row,
         channel: row.channel ?? 'Email',
+        whatsapp_number: row.whatsapp_number ?? '',
         sender_id: row.sender_id ?? '',
         sender_label: row.sender_label ?? '',
         sender_email: row.sender_email ?? '',
@@ -114,9 +116,10 @@ export async function POST(request: NextRequest) {
         campaign_id: getSurveyScope(request),
         blast_group_id: record.blastGroupId || null,
         created_at: record.createdAt || new Date().toISOString(),
-        channel: 'Email',
+        channel: record.channel || 'Email',
         person_name: record.personName || '',
         email: record.email || '',
+        whatsapp_number: record.whatsappNumber || '',
         sender_id: record.senderId || '',
         sender_label: record.senderLabel || '',
         sender_email: record.senderEmail || '',

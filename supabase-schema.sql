@@ -101,6 +101,9 @@ alter table public.blast_records
 alter table public.blast_records
   add column if not exists sender_email text not null default '';
 
+alter table public.blast_records
+  add column if not exists whatsapp_number text not null default '';
+
 update public.blast_records
 set campaign_id = 'biro-humas'
 where campaign_id is null or campaign_id = 'komdigi-default';
@@ -113,6 +116,9 @@ create index if not exists blast_records_campaign_created_idx
 
 create index if not exists blast_records_campaign_email_service_idx
   on public.blast_records (campaign_id, email, service_type);
+
+create index if not exists blast_records_campaign_whatsapp_service_idx
+  on public.blast_records (campaign_id, whatsapp_number, service_type);
 
 alter table public.blast_records enable row level security;
 
@@ -138,6 +144,9 @@ create index if not exists blast_people_created_at_idx
 
 alter table public.blast_people
   add column if not exists campaign_id text not null default 'biro-humas';
+
+alter table public.blast_people
+  add column if not exists whatsapp_number text not null default '';
 
 update public.blast_people
 set campaign_id = 'biro-humas'

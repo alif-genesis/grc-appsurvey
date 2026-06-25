@@ -7,12 +7,25 @@ type BlastPersonRow = {
   updated_at: string;
   name: string;
   email: string;
+  whatsapp_number?: string | null;
   service_types: unknown;
 };
 
 const normalizeServices = (value: unknown) => (
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
 );
+const isValidWhatsAppNumber = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  const normalized = digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
+  return /^628\d{7,12}$/.test(normalized);
+};
+const isMissingWhatsAppColumn = (error: unknown) => {
+  const value = error as { code?: string; message?: string; details?: string } | null;
+  const text = `${value?.message || ''} ${value?.details || ''}`.toLowerCase();
+  return value?.code === '42703'
+    || value?.code === 'PGRST204'
+    || text.includes('whatsapp_number');
+};
 
 const getAllowedServices = async (request: NextRequest) => {
   const supabase = getSupabase();
@@ -31,6 +44,7 @@ const mapPersonRow = (row: BlastPersonRow) => ({
   updatedAt: row.updated_at,
   name: row.name,
   email: row.email,
+  whatsappNumber: row.whatsapp_number ?? '',
   serviceTypes: normalizeServices(row.service_types),
 });
 
@@ -43,6 +57,7 @@ export async function PATCH(
     const body = await request.json() as {
       name?: string;
       email?: string;
+      whatsappNumber?: string;
       serviceTypes?: unknown;
     };
     const updates: Record<string, unknown> = {
@@ -51,10 +66,18 @@ export async function PATCH(
 
     if (typeof body.name === 'string') updates.name = body.name.trim();
     if (typeof body.email === 'string') updates.email = body.email.trim();
+    if (typeof body.whatsappNumber === 'string') updates.whatsapp_number = body.whatsappNumber.trim();
     if (body.serviceTypes !== undefined) updates.service_types = normalizeServices(body.serviceTypes);
 
     if (updates.name === '') {
       return NextResponse.json({ error: 'Nama wajib diisi.' }, { status: 400 });
+    }
+    if (
+      typeof updates.whatsapp_number === 'string'
+      && updates.whatsapp_number
+      && !isValidWhatsAppNumber(updates.whatsapp_number)
+    ) {
+      return NextResponse.json({ error: 'Nomor WA harus menggunakan format 08... atau 628...' }, { status: 400 });
     }
     if (Array.isArray(updates.service_types) && updates.service_types.length === 0) {
       return NextResponse.json({ error: 'Pilih minimal satu layanan.' }, { status: 400 });
@@ -71,8 +94,26 @@ export async function PATCH(
       .from('blast_people')
       .update(updates)
       .eq('id', id)
-      .select('id, created_at, updated_at, name, email, service_types');
-    const { data, error } = await scopeFilter(query, true, request).single();
+      .select('id, created_at, updated_at, name, email, whatsapp_number, service_types');
+    let { data, error }: { data: unknown; error: unknown } = await scopeFilter(query, true, request).single();
+
+    if (error && isMissingWhatsAppColumn(error)) {
+      if (typeof updates.whatsapp_number === 'string' && updates.whatsapp_number) {
+        return NextResponse.json(
+          { error: 'Kolom Nomor WA belum tersedia di Supabase. Jalankan supabase-whatsapp-migration.sql terlebih dahulu.' },
+          { status: 503 },
+        );
+      }
+      const { whatsapp_number: _ignored, ...legacyUpdates } = updates;
+      const legacyQuery = supabase
+        .from('blast_people')
+        .update(legacyUpdates)
+        .eq('id', id)
+        .select('id, created_at, updated_at, name, email, service_types');
+      const legacyResult = await scopeFilter(legacyQuery, true, request).single();
+      data = legacyResult.data;
+      error = legacyResult.error;
+    }
 
     if (error) throw error;
 

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     if (blastId) {
       const query = supabase
         .from('blast_records')
-        .select('submitted_at')
+        .select('submitted_at, person_name, service_type')
         .eq('id', blastId);
       const { data, error } = await query.maybeSingle();
 
@@ -27,24 +27,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         submitted: Boolean(data?.submitted_at),
         submittedAt: data?.submitted_at ?? null,
+        personName: data?.person_name ?? '',
+        serviceType: data?.service_type ?? '',
       });
     }
 
     const query = supabase
       .from('blast_records')
-      .select('submitted_at')
+      .select('submitted_at, person_name')
       .eq('blast_group_id', blastGroupId);
     const { data, error } = await query;
 
     if (error) throw error;
 
-    const rows = (data ?? []) as Array<{ submitted_at: string | null }>;
+    const rows = (data ?? []) as Array<{ submitted_at: string | null; person_name?: string | null }>;
     const submittedCount = rows.filter((row) => row.submitted_at).length;
 
     return NextResponse.json({
       submitted: rows.length > 0 && submittedCount === rows.length,
       submittedCount,
       totalCount: rows.length,
+      personName: rows[0]?.person_name ?? '',
     });
   } catch (error) {
     return NextResponse.json(
