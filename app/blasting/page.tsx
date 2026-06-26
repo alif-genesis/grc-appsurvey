@@ -365,6 +365,19 @@ export default function BlastingPage() {
     });
   }, [people, peopleSearch, peopleServiceFilter, peopleSort]);
 
+  const filteredReadyPeopleIds = useMemo(() => (
+    filteredPeople
+      .filter((person) => person.name.trim() && getPersonServices(person).length > 0)
+      .map((person) => person.id)
+  ), [filteredPeople]);
+
+  const selectedFilteredPeopleCount = useMemo(() => (
+    filteredReadyPeopleIds.filter((id) => selectedPersonIds.includes(id)).length
+  ), [filteredReadyPeopleIds, selectedPersonIds]);
+
+  const isAllFilteredPeopleSelected = filteredReadyPeopleIds.length > 0
+    && selectedFilteredPeopleCount === filteredReadyPeopleIds.length;
+
   const filteredHistory = useMemo(() => {
     const query = historySearch.trim().toLowerCase();
     return history.filter((row) => {
@@ -736,10 +749,13 @@ export default function BlastingPage() {
   };
 
   const toggleAllSelectedPeople = () => {
-    const readyIds = readyPeople.map((person) => person.id);
-    setSelectedPersonIds((current) => (
-      readyIds.every((id) => current.includes(id)) ? [] : readyIds
-    ));
+    setSelectedPersonIds((current) => {
+      if (isAllFilteredPeopleSelected) {
+        return current.filter((id) => !filteredReadyPeopleIds.includes(id));
+      }
+
+      return filteredReadyPeopleIds;
+    });
   };
 
   const getPeopleSortLabel = () => {
@@ -1266,8 +1282,13 @@ export default function BlastingPage() {
               <thead>
                 <tr>
                   <th>
-                    <button type="button" className="text-button" onClick={toggleAllSelectedPeople}>
-                      Pilih Semua
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={toggleAllSelectedPeople}
+                      disabled={filteredReadyPeopleIds.length === 0}
+                    >
+                      {isAllFilteredPeopleSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}
                     </button>
                   </th>
                   <th>

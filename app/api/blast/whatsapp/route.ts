@@ -70,7 +70,7 @@ const buildTrackingLink = (baseUrl: string, blastGroupId: string) => (
 const buildWhatsAppMessage = (person: WhatsAppRecipient, services: string[], trackingLink: string) => {
   const serviceLines = services.map((service, index) => `${index + 1}. ${service}`);
   return [
-    `Yth. Bapak/Ibu ${person.name},`,
+    'Yth. Bapak/Ibu Responden Terpilih,',
     '',
     'Mohon kesediaannya mengisi Survei Kepuasan Layanan dan Persepsi Anti Korupsi untuk layanan berikut:',
     ...serviceLines,
@@ -81,12 +81,12 @@ const buildWhatsAppMessage = (person: WhatsAppRecipient, services: string[], tra
     '',
     'Link ini khusus untuk penerima dan tidak perlu diteruskan. Jika survei sudah disubmit, link tidak dapat digunakan untuk mengirim jawaban kedua.',
     '',
-    'Apabila ada kendala, dapat menghubungi staf Bagian Umum DJID:',
+    'Untuk Informasi lebih lanjut dapat menghubungi staf Bagian Umum DJID Kemkomdigi:',
     '1. Lita Nafilati 087821951462',
     '2. Anas Handoyo 085717345939',
     '3. Hendra Prasetyo 087870521144',
     '',
-    'Terima kasih.',
+    'Terima kasih',
   ].join('\n');
 };
 
