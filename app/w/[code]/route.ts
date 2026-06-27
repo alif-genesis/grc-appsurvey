@@ -43,14 +43,22 @@ export async function GET(
   { params }: { params: Promise<{ code: string }> },
 ) {
   const { code } = await params;
-  const blastGroupId = shortCodeToUuid(code) || await resolveCompactCode(code);
+  const identifierType = code.length === 23 && (code.startsWith('g') || code.startsWith('i'))
+    ? code.slice(0, 1)
+    : '';
+  const typedIdentifier = identifierType ? shortCodeToUuid(code.slice(1)) : '';
+  const blastGroupId = identifierType === 'g'
+    ? typedIdentifier
+    : identifierType === 'i' ? '' : shortCodeToUuid(code) || await resolveCompactCode(code);
+  const blastId = identifierType === 'i' ? typedIdentifier : '';
   const origin = getPublicRequestOrigin(request);
 
-  if (!blastGroupId) {
+  if (!blastGroupId && !blastId) {
     return NextResponse.redirect(new URL('/', origin));
   }
 
   const trackingUrl = new URL('/api/track/click', origin);
-  trackingUrl.searchParams.set('blastGroupId', blastGroupId);
+  if (blastGroupId) trackingUrl.searchParams.set('blastGroupId', blastGroupId);
+  if (blastId) trackingUrl.searchParams.set('blastId', blastId);
   return NextResponse.redirect(trackingUrl);
 }

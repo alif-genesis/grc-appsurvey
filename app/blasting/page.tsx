@@ -141,7 +141,36 @@ const downloadBlobFile = (blob: Blob, filename: string) => {
   }, 0);
 };
 
+const uuidToBase64Url = (uuid: string) => {
+  const hex = uuid.replace(/-/g, '').toLowerCase();
+  if (!/^[a-f0-9]{32}$/.test(hex)) return '';
+
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const bytes = hex.match(/.{2}/g)?.map((value) => Number.parseInt(value, 16)) ?? [];
+  let output = '';
+  let buffer = 0;
+  let bitCount = 0;
+
+  bytes.forEach((byte) => {
+    buffer = (buffer << 8) | byte;
+    bitCount += 8;
+    while (bitCount >= 6) {
+      bitCount -= 6;
+      output += alphabet[(buffer >> bitCount) & 63];
+    }
+  });
+  if (bitCount > 0) output += alphabet[(buffer << (6 - bitCount)) & 63];
+  return output;
+};
+
 const getManualBlastLink = (row: BlastHistory, groupSize = 1) => {
+  const blastIdentifier = row.blastGroupId || row.id;
+  const shortCode = uuidToBase64Url(blastIdentifier);
+  if (shortCode) {
+    const identifierType = row.blastGroupId ? 'g' : 'i';
+    return `${PUBLIC_SURVEY_URL.replace(/\/$/, '')}/w/${identifierType}${shortCode}`;
+  }
+
   const target = row.blastGroupId && groupSize > 1
     ? `${PUBLIC_SURVEY_URL}/multi-survey`
     : row.surveyLink;

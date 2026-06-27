@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_SURVEY_CAMPAIGN_ID, serviceTypes } from '../../services';
+import { defaultWorkUnits } from '../../survey-constants';
 import { formatServerError, getRequestedSurveyScope, getSupabase, scopeFilter } from '../../supabase-server';
 
 type SurveyRecord = {
@@ -68,6 +69,31 @@ const getAllowedServices = async (campaignId: string) => {
     return services.length > 0 ? services : serviceTypes;
   } catch {
     return serviceTypes;
+  }
+};
+
+const getAllowedWorkUnits = async (campaignId: string) => {
+  try {
+    const supabase = getSupabase();
+    let query = supabase
+      .from('work_unit_catalog')
+      .select('name')
+      .eq('active', true);
+
+    if (campaignId === DEFAULT_SURVEY_CAMPAIGN_ID) {
+      query = query.or(`campaign_id.eq.${DEFAULT_SURVEY_CAMPAIGN_ID},campaign_id.eq.komdigi-default,campaign_id.is.null`);
+    } else {
+      query = query.eq('campaign_id', campaignId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const workUnits = (data as Array<{ name?: string }>)
+      .map((row) => row.name?.trim())
+      .filter((name): name is string => Boolean(name));
+    return workUnits.length > 0 || campaignId !== DEFAULT_SURVEY_CAMPAIGN_ID ? workUnits : defaultWorkUnits;
+  } catch {
+    return campaignId === DEFAULT_SURVEY_CAMPAIGN_ID ? defaultWorkUnits : [];
   }
 };
 
@@ -172,6 +198,14 @@ export async function POST(request: NextRequest) {
     if (!allowedServices.includes(profile.serviceType)) {
       return NextResponse.json({ error: 'Jenis layanan tidak valid.' }, { status: 400 });
     }
+    const allowedWorkUnits = await getAllowedWorkUnits(campaignId);
+    const canonicalWorkUnit = allowedWorkUnits.find((workUnit) => (
+      workUnit.toLocaleLowerCase('id-ID') === profile.directorate.toLocaleLowerCase('id-ID')
+    ));
+    if (allowedWorkUnits.length > 0 && !canonicalWorkUnit) {
+      return NextResponse.json({ error: 'Satuan kerja tidak sesuai dengan survey aktif.' }, { status: 400 });
+    }
+    if (canonicalWorkUnit) profile.directorate = canonicalWorkUnit;
     if (!comments) {
       return NextResponse.json({ error: 'Kritik dan saran wajib diisi.' }, { status: 400 });
     }
