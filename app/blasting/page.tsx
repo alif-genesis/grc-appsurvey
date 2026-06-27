@@ -39,6 +39,15 @@ type BlastHistory = {
   submittedAt?: string | null;
 };
 
+type SurveySubmission = {
+  profile: {
+    name: string;
+    directorate: string;
+  };
+  blastId?: string;
+  blastGroupId?: string;
+};
+
 type EmailBlastResult = Omit<BlastHistory, 'createdAt'>;
 type ImportPerson = Pick<BlastPerson, 'name' | 'email' | 'serviceTypes'> & {
   whatsappNumber: string;
@@ -50,6 +59,7 @@ type EmailSender = {
   email: string;
 };
 type PeopleSortMode = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+type RespondentCompletionFilter = 'Sudah isi' | 'Belum isi';
 type BlastResultDialog = {
   title: string;
   message: string;
@@ -105,6 +115,12 @@ const getSenderDisplayLabel = (row: Pick<BlastHistory, 'senderEmail' | 'senderLa
 const formatDateTime = (value?: string | null) => (
   value ? new Date(value).toLocaleString('id-ID') : '-'
 );
+
+const normalizeRespondentValue = (value?: string | null) => (value || '').trim().toLowerCase();
+const normalizeWhatsAppNumber = (value?: string | null) => {
+  const digits = (value || '').replace(/\D/g, '');
+  return digits.startsWith('0') ? `62${digits.slice(1)}` : digits;
+};
 
 const isValidWhatsAppNumber = (value: string) => {
   const digits = value.replace(/\D/g, '');
@@ -231,6 +247,7 @@ export default function BlastingPage() {
   const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [history, setHistory] = useState<BlastHistory[]>([]);
+  const [surveySubmissions, setSurveySubmissions] = useState<SurveySubmission[]>([]);
   const [newPerson, setNewPerson] = useState(createEmptyPerson([]));
   const [editDrafts, setEditDrafts] = useState<Record<string, BlastPersonDraft>>({});
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -258,6 +275,10 @@ export default function BlastingPage() {
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
   const [isDownloadingPeople, setIsDownloadingPeople] = useState(false);
   const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
+  const [isDownloadingRespondentSummary, setIsDownloadingRespondentSummary] = useState(false);
+  const [isRespondentSummaryLoading, setIsRespondentSummaryLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [respondentCompletionFilter, setRespondentCompletionFilter] = useState<RespondentCompletionFilter>('Sudah isi');
   const [historyDeleteDialog, setHistoryDeleteDialog] = useState<HistoryDeleteDialog | null>(null);
   const [activeCampaignId, setActiveCampaignId] = useState('');
   const [emailSenders, setEmailSenders] = useState<EmailSender[]>([]);
@@ -271,6 +292,7 @@ export default function BlastingPage() {
     void initialize();
     loadEmailSenders();
     refreshHistory();
+    loadSurveySubmissions();
   }, []);
 
   useEffect(() => {
@@ -426,7 +448,68 @@ export default function BlastingPage() {
   const isAllFilteredHistorySelected = filteredHistoryIds.length > 0
     && selectedFilteredHistoryCount === filteredHistoryIds.length;
 
+  const submittedPersonIds = useMemo(() => {
+    const historyById = new Map(history.map((row) => [row.id, row]));
+    const historyByGroup = new Map<string, BlastHistory>();
+    history.forEach((row) => {
+      if (row.blastGroupId && !historyByGroup.has(row.blastGroupId)) {
+        historyByGroup.set(row.blastGroupId, row);
+      }
+    });
+
+    const uniqueSubmissions = new Map<string, SurveySubmission>();
+    surveySubmissions.forEach((submission) => {
+      const respondentKey = submission.blastGroupId || [
+        normalizeRespondentValue(submission.profile.name),
+        normalizeRespondentValue(submission.profile.directorate),
+      ].join('-');
+      if (!uniqueSubmissions.has(respondentKey)) uniqueSubmissions.set(respondentKey, submission);
+    });
+
+    const unmatchedPeople = new Map(people.map((person) => [person.id, person]));
+    const matchedPersonIds = new Set<string>();
+
+    uniqueSubmissions.forEach((submission) => {
+      const contact = submission.blastGroupId
+        ? historyByGroup.get(submission.blastGroupId)
+        : submission.blastId ? historyById.get(submission.blastId) : undefined;
+      const contactName = normalizeRespondentValue(contact?.personName || submission.profile.name);
+      const contactEmail = normalizeRespondentValue(contact?.email);
+      const contactWhatsApp = normalizeWhatsAppNumber(contact?.whatsappNumber);
+      let bestPersonId = '';
+      let bestScore = 0;
+
+      unmatchedPeople.forEach((person, personId) => {
+        let score = 0;
+        if (contactEmail && normalizeRespondentValue(person.email) === contactEmail) score += 8;
+        if (contactName && normalizeRespondentValue(person.name) === contactName) score += 4;
+        if (contactWhatsApp && normalizeWhatsAppNumber(person.whatsappNumber) === contactWhatsApp) score += 2;
+        if (score > bestScore) {
+          bestScore = score;
+          bestPersonId = personId;
+        }
+      });
+
+      if (bestPersonId && bestScore > 0) {
+        matchedPersonIds.add(bestPersonId);
+        unmatchedPeople.delete(bestPersonId);
+      }
+    });
+
+    return matchedPersonIds;
+  }, [history, people, surveySubmissions]);
+
+  const respondentSummaryRows = useMemo(() => people
+    .filter((person) => (
+      respondentCompletionFilter === 'Sudah isi'
+        ? submittedPersonIds.has(person.id)
+        : !submittedPersonIds.has(person.id)
+    ))
+    .sort((left, right) => left.name.localeCompare(right.name, 'id', { sensitivity: 'base' })),
+  [people, respondentCompletionFilter, submittedPersonIds]);
+
   const refreshHistory = async () => {
+    setIsHistoryLoading(true);
     try {
       setHistoryStatusFilter('');
       const response = await fetch(withBasePath('/api/blast/history'), { cache: 'no-store' });
@@ -439,6 +522,23 @@ export default function BlastingPage() {
       setSelectedHistoryIds((current) => current.filter((id) => records.some((row) => row.id === id)));
     } catch (error) {
       setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil monitoring blast.');
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const loadSurveySubmissions = async () => {
+    setIsRespondentSummaryLoading(true);
+    try {
+      const response = await fetch(withBasePath('/api/surveys/?lite=1'), { cache: 'no-store' });
+      const payload = await response.json() as { records?: SurveySubmission[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Gagal mengambil status pengisian responden.');
+      setSurveySubmissions(payload.records ?? []);
+    } catch (error) {
+      setSurveySubmissions([]);
+      setBlastNotice(error instanceof Error ? error.message : 'Gagal mengambil status pengisian responden.');
+    } finally {
+      setIsRespondentSummaryLoading(false);
     }
   };
 
@@ -629,6 +729,39 @@ export default function BlastingPage() {
       setBlastNotice(error instanceof Error ? error.message : 'Download Excel daftar responden gagal.');
     } finally {
       setIsDownloadingPeople(false);
+    }
+  };
+
+  const downloadRespondentSummaryExcel = async () => {
+    if (respondentSummaryRows.length === 0) return;
+
+    setIsDownloadingRespondentSummary(true);
+    setBlastNotice(`Membuat file Excel responden ${respondentCompletionFilter.toLowerCase()}...`);
+
+    try {
+      const { default: writeXlsxFile } = await import('write-excel-file/browser');
+      const rows = respondentSummaryRows.map((person, index) => ({
+        nomor: index + 1,
+        nama: person.name,
+        email: person.email || '-',
+        whatsappNumber: person.whatsappNumber || '-',
+      }));
+      const columns = [
+        { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
+        { header: 'Nama', width: 32, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
+        { header: 'Email', width: 36, cell: (row: typeof rows[number]) => ({ value: row.email }) },
+        { header: 'Nomor WA', width: 24, cell: (row: typeof rows[number]) => ({ value: row.whatsappNumber }) },
+      ];
+      const statusSlug = respondentCompletionFilter === 'Sudah isi' ? 'sudah-isi' : 'belum-isi';
+
+      await writeXlsxFile(rows, { columns }).toFile(
+        `summary-responden-${statusSlug}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+      setBlastNotice(`File Excel responden ${respondentCompletionFilter.toLowerCase()} dibuat (${rows.length} orang).`);
+    } catch (error) {
+      setBlastNotice(error instanceof Error ? error.message : 'Download Excel summary responden gagal.');
+    } finally {
+      setIsDownloadingRespondentSummary(false);
     }
   };
 
@@ -1105,6 +1238,7 @@ export default function BlastingPage() {
       window.localStorage.removeItem(PEOPLE_STORAGE_KEY);
       window.localStorage.removeItem('genesis-survey-records');
       setHistory([]);
+      setSurveySubmissions([]);
       setEditDrafts({});
       setHistorySearch('');
       setHistoryServiceFilter('');
@@ -1452,7 +1586,16 @@ export default function BlastingPage() {
       <section className="table-card blast-section">
         <div className="section-heading-row">
           <div className="section-left-actions">
-            <button type="button" className="text-button" onClick={refreshHistory}>Refresh</button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                void refreshHistory();
+                void loadSurveySubmissions();
+              }}
+            >
+              Refresh
+            </button>
             <h2>Riwayat Blast</h2>
           </div>
           <div className="inline-actions">
@@ -1608,6 +1751,75 @@ export default function BlastingPage() {
                         aria-label={`Pilih riwayat blast ${row.personName}`}
                       />
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="table-card blast-section respondent-summary-section">
+        <div className="section-heading-row">
+          <div>
+            <h2>Summary Status Responden</h2>
+            <p className="respondent-summary-caption">
+              {isPeopleLoading || isHistoryLoading || isRespondentSummaryLoading
+                ? 'Memuat status responden...'
+                : `${respondentSummaryRows.length} dari ${people.length} responden`}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="download-button compact-download-button"
+            onClick={() => { void downloadRespondentSummaryExcel(); }}
+            disabled={
+              respondentSummaryRows.length === 0
+              || isDownloadingRespondentSummary
+              || isPeopleLoading
+              || isHistoryLoading
+              || isRespondentSummaryLoading
+            }
+          >
+            {isDownloadingRespondentSummary ? 'Membuat Excel...' : 'Download Excel'}
+          </button>
+        </div>
+
+        <div className="filter-row respondent-summary-filter-row">
+          <label>
+            Status Pengisian
+            <select
+              value={respondentCompletionFilter}
+              onChange={(event) => setRespondentCompletionFilter(event.target.value as RespondentCompletionFilter)}
+            >
+              <option value="Sudah isi">Sudah isi</option>
+              <option value="Belum isi">Belum isi</option>
+            </select>
+          </label>
+        </div>
+
+        {isPeopleLoading || isHistoryLoading || isRespondentSummaryLoading ? (
+          <p>Memuat summary responden...</p>
+        ) : respondentSummaryRows.length === 0 ? (
+          <p>Tidak ada responden dengan status {respondentCompletionFilter.toLowerCase()}.</p>
+        ) : (
+          <div className="blast-table-wrapper respondent-summary-table-scroll">
+            <table className="blast-table respondent-summary-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Nama</th>
+                  <th>Email</th>
+                  <th>Nomor WA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {respondentSummaryRows.map((person, index) => (
+                  <tr key={person.id}>
+                    <td>{index + 1}</td>
+                    <td>{person.name}</td>
+                    <td>{person.email || '-'}</td>
+                    <td>{person.whatsappNumber || '-'}</td>
                   </tr>
                 ))}
               </tbody>

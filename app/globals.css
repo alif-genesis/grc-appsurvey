@@ -1618,6 +1618,17 @@ select {
   align-items: end;
 }
 
+.respondent-summary-filter-row {
+  grid-template-columns: minmax(240px, 360px);
+}
+
+.respondent-summary-caption {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .history-selection-actions {
   display: inline-flex;
   flex-wrap: wrap;
@@ -1944,6 +1955,27 @@ select {
 
 .history-table {
   min-width: 1460px;
+}
+
+.respondent-summary-table-scroll {
+  max-height: min(760px, 68vh);
+  overflow: auto;
+}
+
+.respondent-summary-table {
+  min-width: 720px;
+}
+
+.respondent-summary-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.respondent-summary-table th:first-child,
+.respondent-summary-table td:first-child {
+  width: 80px;
+  text-align: center;
 }
 
 .history-table th:first-child,
