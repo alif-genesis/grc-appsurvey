@@ -1436,7 +1436,6 @@ export default function BlastingPage() {
                   <th>Email</th>
                   <th>Nomor WA</th>
                   <th>Layanan</th>
-                  <th>Layanan</th>
                   <th>Link</th>
                   <th>Aksi</th>
                 </tr>
@@ -1814,6 +1813,7 @@ export default function BlastingPage() {
                   <th>Nama</th>
                   <th>Email</th>
                   <th>Nomor WA</th>
+                  <th>Layanan</th>
                 </tr>
               </thead>
               <tbody>
