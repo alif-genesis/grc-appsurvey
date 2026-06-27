@@ -745,12 +745,14 @@ export default function BlastingPage() {
         nama: person.name,
         email: person.email || '-',
         whatsappNumber: person.whatsappNumber || '-',
+        layanan: getPersonServices(person).join(', ') || '-',
       }));
       const columns = [
         { header: 'No.', width: 8, cell: (row: typeof rows[number]) => ({ value: row.nomor }) },
         { header: 'Nama', width: 32, cell: (row: typeof rows[number]) => ({ value: row.nama }) },
         { header: 'Email', width: 36, cell: (row: typeof rows[number]) => ({ value: row.email }) },
         { header: 'Nomor WA', width: 24, cell: (row: typeof rows[number]) => ({ value: row.whatsappNumber }) },
+        { header: 'Layanan', width: 72, cell: (row: typeof rows[number]) => ({ value: row.layanan }) },
       ];
       const statusSlug = respondentCompletionFilter === 'Sudah isi' ? 'sudah-isi' : 'belum-isi';
 
@@ -1434,6 +1436,7 @@ export default function BlastingPage() {
                   <th>Email</th>
                   <th>Nomor WA</th>
                   <th>Layanan</th>
+                  <th>Layanan</th>
                   <th>Link</th>
                   <th>Aksi</th>
                 </tr>
@@ -1820,6 +1823,7 @@ export default function BlastingPage() {
                     <td>{person.name}</td>
                     <td>{person.email || '-'}</td>
                     <td>{person.whatsappNumber || '-'}</td>
+                    <td>{getPersonServices(person).join(', ') || '-'}</td>
                   </tr>
                 ))}
               </tbody>
