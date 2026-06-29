@@ -322,6 +322,7 @@ export default function MonitoringPage() {
                   <th>No.</th>
                   <th>Tanggal</th>
                   <th>Nama Lengkap</th>
+                  <th>Tujuan</th>
                   <th>Satuan Kerja</th>
                   <th>Jenis Layanan</th>
                   {serviceQuestions.map((_, index) => (
@@ -345,6 +346,16 @@ export default function MonitoringPage() {
                     <td>{index + 1}</td>
                     <td>{new Date(record.createdAt).toLocaleString('id-ID')}</td>
                     <td>{record.profile.name || '-'}</td>
+                    <td>
+                      {record.destination ? (
+                        <div className="response-destination">
+                          <span className={`channel-badge ${record.destination.channel === 'WhatsApp' ? 'whatsapp-channel' : 'email-channel'}`}>
+                            {record.destination.channel}
+                          </span>
+                          <span className="history-target">{record.destination.target}</span>
+                        </div>
+                      ) : '-'}
+                    </td>
                     <td>{record.profile.directorate || '-'}</td>
                     <td>{record.profile.serviceType || '-'}</td>
                     {serviceQuestions.map((_, index) => {

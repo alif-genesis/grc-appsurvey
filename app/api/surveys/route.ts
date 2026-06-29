@@ -16,6 +16,10 @@ type SurveyRecord = {
   campaignId?: string;
   blastId?: string;
   blastGroupId?: string;
+  destination?: {
+    channel: 'Email' | 'WhatsApp';
+    target: string;
+  };
 };
 
 type SurveyRow = {
@@ -29,7 +33,16 @@ type SurveyRow = {
   campaign_id?: string | null;
 };
 
-const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
+type BlastDestinationRow = {
+  id: string;
+  blast_group_id: string | null;
+  channel: 'Email' | 'WhatsApp' | null;
+  email: string | null;
+  whatsapp_number: string | null;
+  service_type: string;
+};
+
+const mapRowToRecord = (row: SurveyRow, destination?: SurveyRecord['destination']): SurveyRecord => ({
   id: row.id,
   createdAt: row.created_at,
   profile: row.profile,
@@ -37,7 +50,15 @@ const mapRowToRecord = (row: SurveyRow): SurveyRecord => ({
   comments: row.comments ?? '',
   blastId: row.blast_id ?? undefined,
   blastGroupId: row.blast_group_id ?? undefined,
+  destination,
 });
+
+const getDestination = (row?: BlastDestinationRow): SurveyRecord['destination'] => {
+  if (!row) return undefined;
+  const channel = row.channel === 'WhatsApp' ? 'WhatsApp' : 'Email';
+  const target = channel === 'WhatsApp' ? row.whatsapp_number?.trim() : row.email?.trim();
+  return target ? { channel, target } : undefined;
+};
 const allowedAnswers = new Set([
   'Sangat Tidak Puas',
   'Tidak Puas',
@@ -125,11 +146,36 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    const rows = data as SurveyRow[];
+    const hasBlastReference = rows.some((row) => row.blast_id || row.blast_group_id);
+    let blastRows: BlastDestinationRow[] = [];
+
+    if (hasBlastReference) {
+      const blastQuery = supabase
+        .from('blast_records')
+        .select('id, blast_group_id, channel, email, whatsapp_number, service_type');
+      const blastResult = await scopeFilter(blastQuery, true, request);
+      if (blastResult.error) throw blastResult.error;
+      blastRows = blastResult.data as BlastDestinationRow[];
+    }
+
+    const blastById = new Map(blastRows.map((row) => [row.id, row]));
+    const blastByGroupAndService = new Map(blastRows.map((row) => [
+      `${row.blast_group_id ?? ''}\u0000${row.service_type}`,
+      row,
+    ]));
+
     return NextResponse.json({
-      records: (data as SurveyRow[]).map((row) => mapRowToRecord({
-        ...row,
-        responses: row.responses ?? {},
-      })),
+      records: rows.map((row) => {
+        const blastRow = (row.blast_id ? blastById.get(row.blast_id) : undefined)
+          ?? (row.blast_group_id
+            ? blastByGroupAndService.get(`${row.blast_group_id}\u0000${row.profile.serviceType}`)
+            : undefined);
+        return mapRowToRecord({
+          ...row,
+          responses: row.responses ?? {},
+        }, getDestination(blastRow));
+      }),
     });
   } catch (error) {
     return NextResponse.json(

@@ -2000,6 +2000,14 @@ select {
   color: #334155;
 }
 
+.response-destination {
+  min-width: 190px;
+}
+
+.response-destination .history-target {
+  margin-top: 6px;
+}
+
 .channel-badge,
 .sender-pill,
 .history-link {

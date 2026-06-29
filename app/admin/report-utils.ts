@@ -74,6 +74,7 @@ const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: Calcula
     'No.',
     'Tanggal',
     'Nama Lengkap',
+    'Tujuan',
     'Satuan Kerja',
     'Jenis Layanan',
     ...serviceQuestions.flatMap((question, index) => [
@@ -95,6 +96,7 @@ const buildMonitoringSheet = (records: SurveyRecord[], calculationScale: Calcula
       index + 1,
       new Date(record.createdAt).toLocaleString('id-ID'),
       record.profile.name,
+      record.destination ? `${record.destination.channel}: ${record.destination.target}` : '-',
       record.profile.directorate,
       record.profile.serviceType,
       ...serviceQuestions.flatMap((question, index) => {
@@ -133,6 +135,7 @@ export const downloadMonitoringExcel = async (records: SurveyRecord[], calculati
       { width: 8 },
       { width: 22 },
       { width: 24 },
+      { width: 30 },
       { width: 30 },
       { width: 52 },
       ...Array.from({ length: serviceQuestions.length + antiCorruptionQuestions.length }).flatMap(() => [
@@ -680,6 +683,7 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[], calculation
       'No.',
       'Tanggal',
       'Nama',
+      'Tujuan',
       'Satuan Kerja',
       'Layanan',
       ...serviceQuestions.map((_, index) => `K${index + 1}`),
@@ -691,6 +695,7 @@ export const downloadMonitoringPDF = async (records: SurveyRecord[], calculation
         index + 1,
         new Date(record.createdAt).toLocaleString('id-ID'),
         record.profile.name,
+        record.destination ? `${record.destination.channel}: ${record.destination.target}` : '-',
         record.profile.directorate,
         record.profile.serviceType,
         ...serviceQuestions.map((_, index) => answerToScale(record.responses[`service-${index + 1}`] ?? '', calculationScale) || '-'),

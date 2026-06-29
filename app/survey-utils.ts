@@ -13,6 +13,10 @@ export type SurveyRecord = {
   campaignId?: string;
   blastId?: string;
   blastGroupId?: string;
+  destination?: {
+    channel: 'Email' | 'WhatsApp';
+    target: string;
+  };
 };
 
 export const SURVEY_STORAGE_KEY = 'genesis-survey-records';
