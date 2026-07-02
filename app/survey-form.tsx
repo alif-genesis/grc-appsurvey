@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
-import { findServiceFromPath, getServiceFromPath, KOMDIGI_LOGO_URL, serviceTypes, SURVEY_QUERY_PARAM, withBasePath } from './services';
+import { findServiceFromPath, getServiceFromPath, getTemporaryDirectSurveyCampaign, KOMDIGI_LOGO_URL, serviceTypes, SURVEY_QUERY_PARAM, withBasePath } from './services';
 import {
   antiCorruptionOptions,
   antiCorruptionQuestions,
@@ -84,11 +84,14 @@ const getInitialBlastContext = (): BlastContext => {
   const hashBlastId = hashParams.get('blastId')?.trim() || '';
   const hashBlastGroupId = hashParams.get('blastGroupId')?.trim() || '';
   const paramsBlastId = params.get('blastId')?.trim() || '';
-  const hasSurveyParam = Boolean(params.get(SURVEY_QUERY_PARAM)?.trim());
+  const hasSurveyContext = Boolean(
+    params.get(SURVEY_QUERY_PARAM)?.trim()
+    || getTemporaryDirectSurveyCampaign(window.location.pathname),
+  );
 
   return {
-    blastId: paramsBlastId || hashBlastId || (hasSurveyParam ? '' : getCookieValue('genesis_blast_id')),
-    blastGroupId: paramsBlastId || hashBlastId ? '' : hashBlastGroupId || (hasSurveyParam ? '' : getCookieValue('genesis_blast_group_id')),
+    blastId: paramsBlastId || hashBlastId || (hasSurveyContext ? '' : getCookieValue('genesis_blast_id')),
+    blastGroupId: paramsBlastId || hashBlastId ? '' : hashBlastGroupId || (hasSurveyContext ? '' : getCookieValue('genesis_blast_group_id')),
   };
 };
 
@@ -105,7 +108,8 @@ const clearSurveyDraft = (key: string) => removeStorageItem(key);
 
 const getCampaignIdFromUrl = () => {
   if (typeof window === 'undefined') return '';
-  return new URLSearchParams(window.location.search).get(SURVEY_QUERY_PARAM)?.trim() || '';
+  return new URLSearchParams(window.location.search).get(SURVEY_QUERY_PARAM)?.trim()
+    || getTemporaryDirectSurveyCampaign(window.location.pathname);
 };
 
 const isPreviewMode = () => {

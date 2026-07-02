@@ -31,6 +31,12 @@ export const PUBLIC_SURVEY_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://su
 export const DEFAULT_SURVEY_CAMPAIGN_ID = (process.env.NEXT_PUBLIC_SURVEY_SCOPE || 'biro-humas').trim() || 'biro-humas';
 export const SURVEY_QUERY_PARAM = 'survey';
 
+// Temporary direct-link exception for the final survey week.
+// Rollback: remove this mapping after the BMN collection window closes.
+const TEMPORARY_DIRECT_SURVEY_CAMPAIGNS: Record<string, string> = {
+  'layanan-penatausahaan-bmn': 'survei-infrastruktur-digital',
+};
+
 export const serviceToSlug = (service: string) =>
   service
     .trim()
@@ -68,6 +74,12 @@ const normalizePathValue = (value: string) =>
     .split('/')
     .join('-')
     .toLowerCase();
+
+export const getTemporaryDirectSurveyCampaign = (pathname: string) => {
+  const decodedPath = decodeURIComponent(pathname).replace(/^\/+|\/+$/g, '');
+  if (!decodedPath) return '';
+  return TEMPORARY_DIRECT_SURVEY_CAMPAIGNS[normalizePathValue(decodedPath)] || '';
+};
 
 export const getServiceFromPath = (pathname: string) => {
   const decodedPath = decodeURIComponent(pathname).replace(/^\/+|\/+$/g, '');
