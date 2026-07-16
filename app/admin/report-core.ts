@@ -136,6 +136,7 @@ export type SkmCalculation = {
 
 const round3 = (value: number) => Number(value.toFixed(3));
 const round2 = (value: number) => Number(value.toFixed(2));
+const round8 = (value: number) => Number(value.toFixed(8));
 
 const getQuestionResults = (
   records: SurveyRecord[],
@@ -157,7 +158,7 @@ const getQuestionResults = (
       question,
       total,
       nrr: round3(nrr),
-      weightedNrr: round3(nrr * weight),
+      weightedNrr: round8(nrr * weight),
     };
   });
 };
@@ -173,8 +174,12 @@ export const getSkmCalculation = (
   const maxScale = calculationScale;
   const serviceResults = getQuestionResults(filteredRecords, serviceQuestions, 'service', 'U', calculationScale);
   const antiResults = getQuestionResults(filteredRecords, antiCorruptionQuestions, 'anti', 'A', calculationScale);
-  const serviceSkmScale = serviceResults.reduce((sum, result) => sum + result.weightedNrr, 0);
-  const antiSkmScale = antiResults.reduce((sum, result) => sum + result.weightedNrr, 0);
+  const serviceSkmScale = filteredRecords.length > 0 && serviceQuestions.length > 0
+    ? serviceResults.reduce((sum, result) => sum + result.total, 0) / filteredRecords.length / serviceQuestions.length
+    : 0;
+  const antiSkmScale = filteredRecords.length > 0 && antiCorruptionQuestions.length > 0
+    ? antiResults.reduce((sum, result) => sum + result.total, 0) / filteredRecords.length / antiCorruptionQuestions.length
+    : 0;
 
   return {
     serviceName,
