@@ -180,6 +180,8 @@ export const getSkmCalculation = (
   const antiSkmScale = filteredRecords.length > 0 && antiCorruptionQuestions.length > 0
     ? antiResults.reduce((sum, result) => sum + result.total, 0) / filteredRecords.length / antiCorruptionQuestions.length
     : 0;
+  const roundedServiceSkmScale = round3(serviceSkmScale);
+  const roundedAntiSkmScale = round3(antiSkmScale);
 
   return {
     serviceName,
@@ -188,10 +190,10 @@ export const getSkmCalculation = (
     records: filteredRecords,
     serviceResults,
     antiResults,
-    serviceSkmScale: round3(serviceSkmScale),
-    serviceSkm100: round2(serviceSkmScale * (100 / maxScale)),
-    antiSkmScale: round3(antiSkmScale),
-    antiSkm100: round2(antiSkmScale * (100 / maxScale)),
+    serviceSkmScale: roundedServiceSkmScale,
+    serviceSkm100: round2(roundedServiceSkmScale * (100 / maxScale)),
+    antiSkmScale: roundedAntiSkmScale,
+    antiSkm100: round2(roundedAntiSkmScale * (100 / maxScale)),
   };
 };
 
