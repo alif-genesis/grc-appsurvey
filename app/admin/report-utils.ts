@@ -36,6 +36,13 @@ const formulaCell = (value: string, bold = false) => ({
   fontWeight: bold ? 'bold' as const : undefined,
 });
 
+const formatDecimal = (value: number, fractionDigits: number) => (
+  value.toLocaleString('id-ID', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+);
+
 const excelColumn = (columnNumber: number) => {
   let column = '';
   let value = columnNumber;
@@ -48,7 +55,15 @@ const excelColumn = (columnNumber: number) => {
 };
 
 const qualityFormula = (scoreCell: string) => (
-  `IF(${scoreCell}>=88.31,"A (Sangat Baik)",IF(${scoreCell}>=76.61,"B (Baik)",IF(${scoreCell}>=65,"C (Kurang Baik)",IF(${scoreCell}>=25,"D (Tidak Baik)","-"))))`
+  `IF(${scoreCell}>=81.26,"A (Sangat Baik)",IF(${scoreCell}>=62.51,"B (Baik)",IF(${scoreCell}>=43.76,"C (Tidak Baik)",IF(${scoreCell}>=25,"D (Sangat Tidak Baik)","-"))))`
+);
+
+const qualityFormulaScale5 = (scoreCell: string) => (
+  `IF(${scoreCell}>=84,"A (Sangat Baik)",IF(${scoreCell}>=68,"B (Baik)",IF(${scoreCell}>=52,"C (Kurang Baik)",IF(${scoreCell}>=36,"D (Tidak Baik)",IF(${scoreCell}>=20,"E (Sangat Tidak Baik)","-")))))`
+);
+
+const qualityFormulaForScale = (scoreCell: string, calculationScale: CalculationScale) => (
+  calculationScale === 5 ? qualityFormulaScale5(scoreCell) : qualityFormula(scoreCell)
 );
 
 const buildSummarySheet = (summary: ReturnType<typeof getSurveySummary>): Row[] => [
@@ -186,6 +201,23 @@ const buildSkmSheet = (calculation: SkmCalculation): Row[] => {
       ? `ROUND(SUM(${excelColumn(startColumn)}${weightedRow}:${excelColumn(endColumn)}${weightedRow}),3)`
       : '0'
   );
+  const score100Formula = (startColumn: number, endColumn: number) => (
+    startColumn <= endColumn
+      ? `ROUND(SUM(${excelColumn(startColumn)}${weightedRow}:${excelColumn(endColumn)}${weightedRow})*${100 / calculation.maxScale},3)`
+      : '0'
+  );
+  const serviceSkmScaleCell = calculation.serviceName
+    ? formulaCell(sumWeightedFormula(serviceStartColumn, serviceEndColumn), true)
+    : cell(calculation.serviceSkmScale, true);
+  const serviceSkm100Cell = calculation.serviceName
+    ? formulaCell(score100Formula(serviceStartColumn, serviceEndColumn), true)
+    : cell(calculation.serviceSkm100, true);
+  const antiSkmScaleCell = calculation.serviceName
+    ? formulaCell(sumWeightedFormula(antiStartColumn, antiEndColumn), true)
+    : cell(calculation.antiSkmScale, true);
+  const antiSkm100Cell = calculation.serviceName
+    ? formulaCell(score100Formula(antiStartColumn, antiEndColumn), true)
+    : cell(calculation.antiSkm100, true);
   const header = [
     cell('No. Resp', true),
     ...calculation.serviceResults.map((result) => cell(result.code, true)),
@@ -231,10 +263,10 @@ const buildSkmSheet = (calculation: SkmCalculation): Row[] => {
       ...calculation.antiResults.map((_, index) => formulaCell(weightedFormula(antiStartColumn + index, calculation.antiResults.length))),
     ],
     [],
-    [cell(`SKM Unit Pelayanan (Skala ${calculation.calculationScale})`, true), formulaCell(sumWeightedFormula(serviceStartColumn, serviceEndColumn), true)],
-    [cell('SKM Unit Pelayanan (Skala 100)', true), formulaCell(`ROUND(B${serviceSkmScaleRow}*${100 / calculation.maxScale},2)`, true), formulaCell(qualityFormula(`B${serviceSkm100Row}`))],
-    [cell(`Indeks Persepsi Anti Korupsi (Skala ${calculation.calculationScale})`, true), formulaCell(sumWeightedFormula(antiStartColumn, antiEndColumn), true)],
-    [cell('Indeks Persepsi Anti Korupsi (Skala 100)', true), formulaCell(`ROUND(B${antiSkmScaleRow}*${100 / calculation.maxScale},2)`, true), formulaCell(qualityFormula(`B${antiSkm100Row}`))],
+    [cell(`SKM Unit Pelayanan (Skala ${calculation.calculationScale})`, true), serviceSkmScaleCell],
+    [cell('SKM Unit Pelayanan (Skala 100)', true), serviceSkm100Cell, formulaCell(qualityFormulaForScale(`B${serviceSkm100Row}`, calculation.calculationScale))],
+    [cell(`Indeks Persepsi Anti Korupsi (Skala ${calculation.calculationScale})`, true), antiSkmScaleCell],
+    [cell('Indeks Persepsi Anti Korupsi (Skala 100)', true), antiSkm100Cell, formulaCell(qualityFormulaForScale(`B${antiSkm100Row}`, calculation.calculationScale))],
     [],
     [cell('Keterangan Unsur', true)],
     ...Array.from({ length: maxQuestionCount }).map((_, index) => [
@@ -779,8 +811,8 @@ export const downloadSkmPDF = async (calculation: SkmCalculation) => {
     startY: (doc as any).lastAutoTable.finalY + 18,
     head: [['Indikator', `Nilai Skala ${calculation.calculationScale}`, 'Nilai Skala 100', 'Mutu']],
     body: [
-      ['SKM Unit Pelayanan', calculation.serviceSkmScale, calculation.serviceSkm100, getServiceQuality(calculation.serviceSkm100)],
-      ['Indeks Persepsi Anti Korupsi', calculation.antiSkmScale, calculation.antiSkm100, getServiceQuality(calculation.antiSkm100)],
+      ['SKM Unit Pelayanan', formatDecimal(calculation.serviceSkmScale, 3), formatDecimal(calculation.serviceSkm100, 3), getServiceQuality(calculation.serviceSkm100, calculation.calculationScale)],
+      ['Indeks Persepsi Anti Korupsi', formatDecimal(calculation.antiSkmScale, 3), formatDecimal(calculation.antiSkm100, 3), getServiceQuality(calculation.antiSkm100, calculation.calculationScale)],
     ],
     styles: { fontSize: 8, cellPadding: 4, textColor: '#0f172a', lineColor: '#dbe7f6', lineWidth: 0.4 },
     headStyles: { fillColor: '#0f4eb8', textColor: '#ffffff' },

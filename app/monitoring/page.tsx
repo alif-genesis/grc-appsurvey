@@ -9,6 +9,7 @@ import { withBasePath } from '../services';
 import {
   answerToScale,
   getServiceQuality,
+  getServiceQualityRank,
   getSkmCalculation,
   loadSurveyRecords,
   SurveyRecord,
@@ -34,13 +35,17 @@ const fetchJson = async <T,>(path: string): Promise<T> => {
   }
 };
 
-const getQualityClass = (score: number) => {
-  if (score >= 88.31) return 'quality-a';
-  if (score >= 76.61) return 'quality-b';
-  if (score >= 65) return 'quality-c';
-  if (score >= 25) return 'quality-d';
+const getQualityClass = (score: number, calculationScale: CalculationScale) => {
+  const rank = getServiceQualityRank(score, calculationScale).toLowerCase();
+  if (rank) return `quality-${rank}`;
   return 'quality-empty';
 };
+
+const formatSkmNumber = (value: number, minimumFractionDigits: number, maximumFractionDigits = minimumFractionDigits) => (
+  value > 0
+    ? value.toLocaleString('id-ID', { minimumFractionDigits, maximumFractionDigits })
+    : '-'
+);
 
 export default function MonitoringPage() {
   const [records, setRecords] = useState<SurveyRecord[]>([]);
@@ -196,18 +201,18 @@ export default function MonitoringPage() {
         <div className="skm-score-grid">
           <div className="skm-score-card">
             <span>SKM Unit Pelayanan</span>
-            <small>{getServiceQuality(skmCalculation.serviceSkm100)}</small>
-            <div className={`skm-score-value ${getQualityClass(skmCalculation.serviceSkm100)}`}>
-              <strong>{skmCalculation.serviceSkm100 || '-'}</strong>
-              <em>Skala {calculationScale}: {skmCalculation.serviceSkmScale || '-'}</em>
+            <small>{getServiceQuality(skmCalculation.serviceSkm100, calculationScale)}</small>
+            <div className={`skm-score-value ${getQualityClass(skmCalculation.serviceSkm100, calculationScale)}`}>
+              <strong>{formatSkmNumber(skmCalculation.serviceSkm100, 2)}</strong>
+              <em>Skala {calculationScale}: {formatSkmNumber(skmCalculation.serviceSkmScale, 3)}</em>
             </div>
           </div>
           <div className="skm-score-card">
             <span>Indeks Persepsi Anti Korupsi</span>
-            <small>{getServiceQuality(skmCalculation.antiSkm100)}</small>
-            <div className={`skm-score-value ${getQualityClass(skmCalculation.antiSkm100)}`}>
-              <strong>{skmCalculation.antiSkm100 || '-'}</strong>
-              <em>Skala {calculationScale}: {skmCalculation.antiSkmScale || '-'}</em>
+            <small>{getServiceQuality(skmCalculation.antiSkm100, calculationScale)}</small>
+            <div className={`skm-score-value ${getQualityClass(skmCalculation.antiSkm100, calculationScale)}`}>
+              <strong>{formatSkmNumber(skmCalculation.antiSkm100, 3)}</strong>
+              <em>Skala {calculationScale}: {formatSkmNumber(skmCalculation.antiSkmScale, 3)}</em>
             </div>
           </div>
         </div>

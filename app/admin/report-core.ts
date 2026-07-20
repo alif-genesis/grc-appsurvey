@@ -135,8 +135,44 @@ export type SkmCalculation = {
 };
 
 const round3 = (value: number) => Number(value.toFixed(3));
-const round2 = (value: number) => Number(value.toFixed(2));
 const round8 = (value: number) => Number(value.toFixed(8));
+
+const getRawSkmScale = (
+  records: SurveyRecord[],
+  questions: string[],
+  prefix: 'service' | 'anti',
+  calculationScale: CalculationScale,
+) => (
+  records.length > 0 && questions.length > 0
+    ? questions.reduce((questionSum, _, index) => (
+      questionSum + records.reduce((recordSum, record) => {
+        const scale = answerToScale(record.responses[`${prefix}-${index + 1}`] ?? '', calculationScale);
+        return recordSum + (typeof scale === 'number' ? scale : 0);
+      }, 0)
+    ), 0) / records.length / questions.length
+    : 0
+);
+
+const getAverageServiceSkmScale = (
+  records: SurveyRecord[],
+  questions: string[],
+  prefix: 'service' | 'anti',
+  calculationScale: CalculationScale,
+) => {
+  const serviceGroups = records.reduce<Record<string, SurveyRecord[]>>((groups, record) => {
+    const serviceType = record.profile.serviceType;
+    if (!serviceType) return groups;
+    groups[serviceType] = [...(groups[serviceType] ?? []), record];
+    return groups;
+  }, {});
+  const scales = Object.values(serviceGroups).map((groupRecords) => (
+    getRawSkmScale(groupRecords, questions, prefix, calculationScale)
+  ));
+
+  return scales.length > 0
+    ? scales.reduce((sum, scale) => sum + scale, 0) / scales.length
+    : 0;
+};
 
 const getQuestionResults = (
   records: SurveyRecord[],
@@ -174,12 +210,12 @@ export const getSkmCalculation = (
   const maxScale = calculationScale;
   const serviceResults = getQuestionResults(filteredRecords, serviceQuestions, 'service', 'U', calculationScale);
   const antiResults = getQuestionResults(filteredRecords, antiCorruptionQuestions, 'anti', 'A', calculationScale);
-  const serviceSkmScale = filteredRecords.length > 0 && serviceQuestions.length > 0
-    ? serviceResults.reduce((sum, result) => sum + result.total, 0) / filteredRecords.length / serviceQuestions.length
-    : 0;
-  const antiSkmScale = filteredRecords.length > 0 && antiCorruptionQuestions.length > 0
-    ? antiResults.reduce((sum, result) => sum + result.total, 0) / filteredRecords.length / antiCorruptionQuestions.length
-    : 0;
+  const serviceSkmScale = serviceName
+    ? getRawSkmScale(filteredRecords, serviceQuestions, 'service', calculationScale)
+    : getAverageServiceSkmScale(filteredRecords, serviceQuestions, 'service', calculationScale);
+  const antiSkmScale = serviceName
+    ? getRawSkmScale(filteredRecords, antiCorruptionQuestions, 'anti', calculationScale)
+    : getAverageServiceSkmScale(filteredRecords, antiCorruptionQuestions, 'anti', calculationScale);
   const roundedServiceSkmScale = round3(serviceSkmScale);
   const roundedAntiSkmScale = round3(antiSkmScale);
 
@@ -191,16 +227,44 @@ export const getSkmCalculation = (
     serviceResults,
     antiResults,
     serviceSkmScale: roundedServiceSkmScale,
-    serviceSkm100: round2(roundedServiceSkmScale * (100 / maxScale)),
+    serviceSkm100: round3(serviceSkmScale * (100 / maxScale)),
     antiSkmScale: roundedAntiSkmScale,
-    antiSkm100: round2(roundedAntiSkmScale * (100 / maxScale)),
+    antiSkm100: round3(antiSkmScale * (100 / maxScale)),
   };
 };
 
-export const getServiceQuality = (score: number) => {
-  if (score >= 88.31) return 'A (Sangat Baik)';
-  if (score >= 76.61) return 'B (Baik)';
-  if (score >= 65) return 'C (Kurang Baik)';
-  if (score >= 25) return 'D (Tidak Baik)';
+export const getServiceQualityRank = (score: number, calculationScale: CalculationScale = 4) => {
+  if (calculationScale === 5) {
+    if (score >= 84) return 'A';
+    if (score >= 68) return 'B';
+    if (score >= 52) return 'C';
+    if (score >= 36) return 'D';
+    if (score >= 20) return 'E';
+    return '';
+  }
+
+  if (score >= 81.26) return 'A';
+  if (score >= 62.51) return 'B';
+  if (score >= 43.76) return 'C';
+  if (score >= 25) return 'D';
+  return '';
+};
+
+export const getServiceQuality = (score: number, calculationScale: CalculationScale = 4) => {
+  const rank = getServiceQualityRank(score, calculationScale);
+
+  if (calculationScale === 5) {
+    if (rank === 'A') return 'A (Sangat Baik)';
+    if (rank === 'B') return 'B (Baik)';
+    if (rank === 'C') return 'C (Kurang Baik)';
+    if (rank === 'D') return 'D (Tidak Baik)';
+    if (rank === 'E') return 'E (Sangat Tidak Baik)';
+    return '-';
+  }
+
+  if (rank === 'A') return 'A (Sangat Baik)';
+  if (rank === 'B') return 'B (Baik)';
+  if (rank === 'C') return 'C (Tidak Baik)';
+  if (rank === 'D') return 'D (Sangat Tidak Baik)';
   return '-';
 };

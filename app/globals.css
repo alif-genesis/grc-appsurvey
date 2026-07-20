@@ -1180,6 +1180,7 @@ select {
 }
 
 .skm-score-value.quality-d,
+.skm-score-value.quality-e,
 .skm-score-value.quality-empty {
   background: #fecaca;
   color: #7f1d1d;
